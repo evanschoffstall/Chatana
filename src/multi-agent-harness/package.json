@@ -1,0 +1,410 @@
+{
+  "name": "chatana",
+  "displayName": "Chatana",
+  "description": "AI-powered multi-agent orchestration for VS Code - transforms your IDE into a collaborative environment where a team of AI agents works alongside you",
+  "version": "0.1.5",
+  "publisher": "BrendanKowitz",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/brendankowitz/chatana"
+  },
+  "engines": {
+    "vscode": "^1.84.0"
+  },
+  "categories": [
+    "Other",
+    "Machine Learning"
+  ],
+  "keywords": [
+    "claude",
+    "ai",
+    "agent",
+    "multi-agent",
+    "mcp",
+    "chatana",
+    "orchestration"
+  ],
+  "icon": "resources/icon.png",
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "chatana.openPanel",
+        "title": "Open Chatana Panel",
+        "category": "Chatana",
+        "icon": "$(robot)"
+      },
+      {
+        "command": "chatana.submitTask",
+        "title": "Submit Task to Orchestrator",
+        "category": "Chatana",
+        "icon": "$(play)"
+      },
+      {
+        "command": "chatana.initProject",
+        "title": "Initialize Chatana for Project",
+        "category": "Chatana",
+        "icon": "$(folder-opened)"
+      },
+      {
+        "command": "chatana.spawnAgent",
+        "title": "Manually Spawn Agent",
+        "category": "Chatana"
+      },
+      {
+        "command": "chatana.destroyAgent",
+        "title": "Remove Agent",
+        "category": "Chatana"
+      },
+      {
+        "command": "chatana.sendToAgent",
+        "title": "Send Selection to Agent",
+        "category": "Chatana"
+      },
+      {
+        "command": "chatana.stopAll",
+        "title": "Stop All Agents",
+        "category": "Chatana",
+        "icon": "$(debug-stop)"
+      },
+      {
+        "command": "chatana.viewStatus",
+        "title": "View Agent Status",
+        "category": "Chatana"
+      },
+      {
+        "command": "chatana.refreshClaims",
+        "title": "Refresh File Claims",
+        "category": "Chatana"
+      },
+      {
+        "command": "chatana.pauseAgent",
+        "title": "Pause Agent",
+        "category": "Chatana",
+        "icon": "$(debug-pause)"
+      },
+      {
+        "command": "chatana.resumeAgent",
+        "title": "Resume Agent",
+        "category": "Chatana",
+        "icon": "$(debug-continue)"
+      },
+      {
+        "command": "chatana.openConfig",
+        "title": "Open Chatana Config",
+        "category": "Chatana",
+        "icon": "$(gear)"
+      },
+      {
+        "command": "chatana.viewMemory",
+        "title": "View Agent Memory",
+        "category": "Chatana"
+      },
+      {
+        "command": "chatana.openAgentView",
+        "title": "Open Agent Detail View",
+        "category": "Chatana",
+        "icon": "$(window)"
+      },
+      {
+        "command": "chatana.openKanban",
+        "title": "Open Kanban Board",
+        "category": "Chatana",
+        "icon": "$(checklist)"
+      },
+      {
+        "command": "chatana.createWorkItem",
+        "title": "Create Work Item",
+        "category": "Chatana",
+        "icon": "$(add)"
+      },
+      {
+        "command": "chatana.refreshKanban",
+        "title": "Refresh Kanban Board",
+        "category": "Chatana",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "chatana.openKnowledgeExplorer",
+        "title": "Open Knowledge Explorer",
+        "category": "Chatana",
+        "icon": "$(book)"
+      },
+      {
+        "command": "chatana.openInvestigationBrowser",
+        "title": "Open Investigation Browser",
+        "category": "Chatana",
+        "icon": "$(search)"
+      },
+      {
+        "command": "chatana.archiveMessage",
+        "title": "Archive Message",
+        "category": "Chatana",
+        "icon": "$(archive)"
+      },
+      {
+        "command": "chatana.unarchiveMessage",
+        "title": "Unarchive Message",
+        "category": "Chatana",
+        "icon": "$(inbox)"
+      },
+      {
+        "command": "chatana.viewMessage",
+        "title": "View Message",
+        "category": "Chatana",
+        "icon": "$(file)"
+      }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "chatana",
+          "title": "Chatana",
+          "icon": "resources/agent-icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "chatana": [
+        {
+          "id": "chatana.panel",
+          "type": "webview",
+          "name": "Orchestrator Chat",
+          "contextualTitle": "Chatana Orchestrator",
+          "visibility": "visible"
+        },
+        {
+          "id": "chatana.claims",
+          "name": "File Claims",
+          "contextualTitle": "Active File Claims",
+          "visibility": "collapsed"
+        },
+        {
+          "id": "chatana.messages",
+          "name": "Messages",
+          "contextualTitle": "Agent Messages",
+          "visibility": "collapsed"
+        }
+      ]
+    },
+    "menus": {
+      "editor/context": [
+        {
+          "command": "chatana.sendToAgent",
+          "when": "editorHasSelection",
+          "group": "chatana"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "chatana.pauseAgent",
+          "when": "view == chatana.agents && viewItem == agent",
+          "group": "inline"
+        },
+        {
+          "command": "chatana.openAgentView",
+          "when": "view == chatana.agents && viewItem == agent",
+          "group": "navigation"
+        },
+        {
+          "command": "chatana.destroyAgent",
+          "when": "view == chatana.agents && viewItem == agent"
+        },
+        {
+          "command": "chatana.archiveMessage",
+          "when": "view == chatana.messages && viewItem == message",
+          "group": "inline"
+        }
+      ],
+      "view/title": [
+        {
+          "command": "chatana.openKanban",
+          "when": "view == chatana.panel",
+          "group": "navigation@1"
+        },
+        {
+          "command": "chatana.openKnowledgeExplorer",
+          "when": "view == chatana.panel",
+          "group": "navigation@2"
+        },
+        {
+          "command": "chatana.openInvestigationBrowser",
+          "when": "view == chatana.panel",
+          "group": "navigation@3"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "Chatana",
+      "properties": {
+        "chatana.coordinatorModel": {
+          "type": "string",
+          "enum": [
+            "opus",
+            "sonnet",
+            "haiku"
+          ],
+          "default": "sonnet",
+          "enumDescriptions": [
+            "Claude Opus - Most capable, best for complex orchestration",
+            "Claude Sonnet - Balanced performance and speed (recommended)",
+            "Claude Haiku - Fastest, best for simple coordination tasks"
+          ],
+          "description": "Model to use for the orchestrator agent"
+        },
+        "chatana.workerModel": {
+          "type": "string",
+          "enum": [
+            "opus",
+            "sonnet",
+            "haiku"
+          ],
+          "default": "sonnet",
+          "enumDescriptions": [
+            "Claude Opus - Most capable, best for complex tasks",
+            "Claude Sonnet - Balanced performance and speed (recommended)",
+            "Claude Haiku - Fastest, best for simple tasks"
+          ],
+          "description": "Model to use for spawned worker agents"
+        },
+        "chatana.maxConcurrentAgents": {
+          "type": "number",
+          "default": 5,
+          "description": "Maximum number of concurrent worker agents"
+        },
+        "chatana.mcpServers": {
+          "type": "object",
+          "default": {},
+          "description": "Additional MCP server configurations for agents"
+        },
+        "chatana.showClaimsInEditor": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show file claim indicators in editor gutter"
+        },
+        "chatana.notifyOnAgentMessage": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show notification when agents send messages"
+        },
+        "chatana.workingDirectory": {
+          "type": "string",
+          "default": "",
+          "description": "Working directory for agents (defaults to workspace root)"
+        },
+        "chatana.agentColorPalette": {
+          "type": "array",
+          "default": [
+            "#3B82F6",
+            "#EF4444",
+            "#F59E0B",
+            "#10B981",
+            "#8B5CF6",
+            "#EC4899",
+            "#06B6D4",
+            "#84CC16"
+          ],
+          "description": "Color palette for dynamically spawned agents"
+        },
+        "chatana.memory.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable persistent agent memory"
+        },
+        "chatana.memory.decayDays": {
+          "type": "number",
+          "default": 90,
+          "description": "Memory decay half-life in days"
+        },
+        "chatana.hooks.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable agent hooks (OnAgentFinished, etc.)"
+        },
+        "chatana.autoReview": {
+          "type": "boolean",
+          "default": false,
+          "description": "Automatically spawn a review agent when agents complete"
+        },
+        "chatana.workflow.taskDescriptionFormat": {
+          "type": "string",
+          "enum": [
+            "plain",
+            "user-story"
+          ],
+          "default": "plain",
+          "enumDescriptions": [
+            "Plain text descriptions (e.g., 'Implement login button functionality')",
+            "User story format (e.g., 'As a user, I want a login button so that I can access my account')"
+          ],
+          "description": "Format for task descriptions when splitting investigations into tasks"
+        }
+      }
+    },
+    "colors": [
+      {
+        "id": "chatana.claimExclusiveBackground",
+        "description": "Background color for exclusively claimed files",
+        "defaults": {
+          "dark": "#F59E0B20",
+          "light": "#F59E0B20"
+        }
+      },
+      {
+        "id": "chatana.claimSharedBackground",
+        "description": "Background color for shared claimed files",
+        "defaults": {
+          "dark": "#3B82F620",
+          "light": "#3B82F620"
+        }
+      }
+    ],
+    "customEditors": [
+      {
+        "viewType": "chatana.agentView",
+        "displayName": "Chatana Agent View",
+        "selector": [
+          {
+            "filenamePattern": "*.chatana"
+          }
+        ],
+        "priority": "default"
+      }
+    ]
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run copy-docs && npm run build",
+    "copy-docs": "node -e \"const fs=require('fs');const path=require('path');const root=path.join(__dirname,'..','..');['README.md','LICENSE'].forEach(f=>{const content=fs.readFileSync(path.join(root,f),'utf8');fs.writeFileSync(f,content);});\"",
+    "build": "npm run build:extension && npm run build:webview",
+    "build:extension": "webpack --mode production",
+    "build:webview": "cd webview-ui && npm run build",
+    "watch": "webpack --mode development --watch",
+    "lint": "eslint src --ext ts",
+    "test": "node ./out/test/runTests.js",
+    "package": "npm run copy-docs && vsce package"
+  },
+  "dependencies": {
+    "@anthropic-ai/claude-agent-sdk": "^0.1.0",
+    "js-yaml": "^4.1.0",
+    "uuid": "^9.0.0",
+    "zod": "^3.22.0"
+  },
+  "devDependencies": {
+    "@types/js-yaml": "^4.0.9",
+    "@types/node": "^20.0.0",
+    "@types/uuid": "^9.0.7",
+    "@types/vscode": "^1.84.0",
+    "@typescript-eslint/eslint-plugin": "^6.0.0",
+    "@typescript-eslint/parser": "^6.0.0",
+    "@vscode/vsce": "^3.7.1",
+    "eslint": "^8.50.0",
+    "sharp": "^0.34.5",
+    "ts-loader": "^9.4.0",
+    "typescript": "^5.2.0",
+    "webpack": "^5.88.0",
+    "webpack-cli": "^5.1.0"
+  }
+}
