@@ -1,9 +1,9 @@
-import * as vscode from "vscode";
 import * as fs from "fs/promises";
 import * as path from "path";
+import * as vscode from "vscode";
 import { getConfigManager } from "./ConfigManager";
-import { validateAgentProfile } from "./validation";
 import { interpolate } from "./interpolation";
+import { validateAgentProfile } from "./validation";
 
 /**
  * Agent profile defines a reusable agent configuration template.
@@ -72,18 +72,32 @@ export interface AgentProfile {
 }
 
 /**
- * Model configuration - supports both Claude SDK and VS Code LLM
+ * Model configuration - supports both Copilot CLI and VS Code LLM
  */
 export type ModelConfig =
-  | ClaudeModelConfig
+  | CopilotModelConfig
+  | LegacyOpenAIModelConfig
+  | LegacyClaudeModelConfig
   | VSCodeLLMConfig;
 
-export interface ClaudeModelConfig {
+export interface CopilotModelConfig {
   /** Model provider */
-  provider: "claude";
-  /** Claude model ID */
+  provider: "copilot";
+  /** Copilot model ID */
   modelId: string;
   /** Optional API key override (usually from env) */
+  apiKeyEnv?: string;
+}
+
+export interface LegacyClaudeModelConfig {
+  provider: "claude";
+  modelId: string;
+  apiKeyEnv?: string;
+}
+
+export interface LegacyOpenAIModelConfig {
+  provider: "openai";
+  modelId: string;
   apiKeyEnv?: string;
 }
 
@@ -101,15 +115,15 @@ export interface VSCodeLLMConfig {
  */
 export const DEFAULT_MODEL_PROFILES: AgentProfile[] = [
   {
-    id: "claude-sonnet",
-    name: "Claude Sonnet",
+    id: "copilot-gpt-4.1",
+    name: "Copilot GPT-4.1",
     role: "General AI Assistant",
-    description: "Balanced Claude model - great for most tasks",
+    description: "Balanced Copilot model - great for most tasks",
     icon: "sparkle",
     color: "#D97706",
     model: {
-      provider: "claude",
-      modelId: "claude-sonnet-4-20250514",
+      provider: "copilot",
+      modelId: "gpt-4.1",
     },
     systemPrompt: `You are a helpful AI assistant working on the {{projectName}} project.
 
@@ -125,18 +139,18 @@ Be thorough, accurate, and helpful. Follow project conventions and best practice
       maxTurns: 50,
       autoClaimFiles: true,
     },
-    tags: ["default", "claude", "balanced"],
+    tags: ["default", "copilot", "balanced"],
   },
   {
-    id: "claude-opus",
-    name: "Claude Opus",
+    id: "copilot-gpt-5",
+    name: "Copilot GPT-5",
     role: "Expert AI Assistant",
-    description: "Most capable Claude model - for complex tasks",
+    description: "Most capable Copilot model - for complex tasks",
     icon: "star-full",
     color: "#7C3AED",
     model: {
-      provider: "claude",
-      modelId: "claude-opus-4-20250514",
+      provider: "copilot",
+      modelId: "gpt-5",
     },
     systemPrompt: `You are an expert AI assistant with deep analytical capabilities, working on the {{projectName}} project.
 
@@ -152,18 +166,18 @@ Take your time to think through complex problems. Provide thorough, well-reasone
       maxTurns: 100,
       autoClaimFiles: true,
     },
-    tags: ["default", "claude", "expert"],
+    tags: ["default", "copilot", "expert"],
   },
   {
-    id: "claude-haiku",
-    name: "Claude Haiku",
+    id: "copilot-gpt-4.1-mini",
+    name: "Copilot GPT-4.1 Mini",
     role: "Fast AI Assistant",
-    description: "Fastest Claude model - for quick tasks",
+    description: "Fast Copilot model - for quick tasks",
     icon: "zap",
     color: "#06B6D4",
     model: {
-      provider: "claude",
-      modelId: "claude-haiku-3-5-20241022",
+      provider: "copilot",
+      modelId: "gpt-4.1-mini",
     },
     systemPrompt: `You are a fast, efficient AI assistant working on the {{projectName}} project.
 
@@ -179,7 +193,7 @@ Be concise and direct. Focus on getting the task done quickly and correctly.`,
       maxTurns: 30,
       autoClaimFiles: true,
     },
-    tags: ["default", "claude", "fast"],
+    tags: ["default", "copilot", "fast"],
   },
   {
     id: "copilot-auto",
@@ -224,8 +238,8 @@ export const BUILTIN_PROFILES: AgentProfile[] = [
     icon: "code",
     color: "#3B82F6",
     model: {
-      provider: "claude",
-      modelId: "claude-sonnet-4-20250514",
+      provider: "copilot",
+      modelId: "gpt-4.1",
     },
     systemPrompt: `You are a senior software developer working on the {{projectName}} project.
 
@@ -261,8 +275,8 @@ Guidelines:
     icon: "checklist",
     color: "#10B981",
     model: {
-      provider: "claude",
-      modelId: "claude-sonnet-4-20250514",
+      provider: "copilot",
+      modelId: "gpt-4.1",
     },
     systemPrompt: `You are a senior code reviewer for the {{projectName}} project.
 
@@ -294,8 +308,8 @@ Be constructive and specific in your feedback. Prioritize critical issues over s
     icon: "symbol-structure",
     color: "#8B5CF6",
     model: {
-      provider: "claude",
-      modelId: "claude-sonnet-4-20250514",
+      provider: "copilot",
+      modelId: "gpt-4.1",
     },
     systemPrompt: `You are a software architect for the {{projectName}} project.
 
@@ -328,8 +342,8 @@ Consider scalability, maintainability, and team capabilities in your decisions.`
     icon: "beaker",
     color: "#F59E0B",
     model: {
-      provider: "claude",
-      modelId: "claude-sonnet-4-20250514",
+      provider: "copilot",
+      modelId: "gpt-4.1",
     },
     systemPrompt: `You are a test engineer for the {{projectName}} project.
 
@@ -362,8 +376,8 @@ Aim for high coverage with meaningful assertions. Consider edge cases and error 
     icon: "book",
     color: "#EC4899",
     model: {
-      provider: "claude",
-      modelId: "claude-sonnet-4-20250514",
+      provider: "copilot",
+      modelId: "gpt-4.1",
     },
     systemPrompt: `You are a technical writer for the {{projectName}} project.
 
@@ -420,13 +434,18 @@ class AgentProfileManager {
         if (!file.endsWith(".json")) continue;
 
         try {
-          const content = await fs.readFile(path.join(agentsDir, file), "utf-8");
+          const content = await fs.readFile(
+            path.join(agentsDir, file),
+            "utf-8",
+          );
           const parsed = JSON.parse(content);
 
           // Validate using Zod schema
           const validation = validateAgentProfile(parsed);
           if (!validation.success) {
-            console.warn(`Invalid agent profile in ${file}: ${validation.error}`);
+            console.warn(
+              `Invalid agent profile in ${file}: ${validation.error}`,
+            );
             continue;
           }
 
@@ -469,8 +488,8 @@ class AgentProfileManager {
    */
   async getProfilesByTag(tag: string): Promise<AgentProfile[]> {
     await this.load();
-    return Array.from(this.profiles.values()).filter(
-      (p) => p.tags?.includes(tag)
+    return Array.from(this.profiles.values()).filter((p) =>
+      p.tags?.includes(tag),
     );
   }
 
@@ -498,7 +517,11 @@ class AgentProfileManager {
     }
 
     const configManager = getConfigManager();
-    const filePath = path.join(configManager.getChatanaPath(), "agents", `${id}.json`);
+    const filePath = path.join(
+      configManager.getChatanaPath(),
+      "agents",
+      `${id}.json`,
+    );
 
     try {
       await fs.unlink(filePath);
@@ -514,23 +537,19 @@ class AgentProfileManager {
    */
   buildSystemPrompt(
     profile: AgentProfile,
-    variables: Record<string, string>
+    variables: Record<string, string>,
   ): string {
-    const result = interpolate(
-      profile.systemPrompt,
-      variables,
-      {
-        strict: false,
-        defaultValue: "",
-        warnOnMissing: true,
-      }
-    );
+    const result = interpolate(profile.systemPrompt, variables, {
+      strict: false,
+      defaultValue: "",
+      warnOnMissing: true,
+    });
 
     // Log additional context for debugging
     if (result.missing.length > 0) {
       console.warn(
         `Profile '${profile.id}' is missing variables: ${result.missing.join(", ")}. ` +
-        "Using empty strings as defaults."
+          "Using empty strings as defaults.",
       );
     }
 
@@ -574,7 +593,9 @@ export async function isVSCodeLLMAvailable(): Promise<boolean> {
 /**
  * Get available VS Code LLM models
  */
-export async function getVSCodeLLMModels(): Promise<Array<{ id: string; family: string; version: string }>> {
+export async function getVSCodeLLMModels(): Promise<
+  Array<{ id: string; family: string; version: string }>
+> {
   try {
     if (typeof vscode.lm === "undefined") {
       return [];

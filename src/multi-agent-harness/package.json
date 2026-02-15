@@ -16,7 +16,7 @@
     "Machine Learning"
   ],
   "keywords": [
-    "claude",
+    "copilot",
     "ai",
     "agent",
     "multi-agent",
@@ -174,18 +174,21 @@
           "type": "webview",
           "name": "Orchestrator Chat",
           "contextualTitle": "Chatana Orchestrator",
+          "icon": "$(comment-discussion)",
           "visibility": "visible"
         },
         {
           "id": "chatana.claims",
           "name": "File Claims",
           "contextualTitle": "Active File Claims",
+          "icon": "$(lock)",
           "visibility": "collapsed"
         },
         {
           "id": "chatana.messages",
           "name": "Messages",
           "contextualTitle": "Agent Messages",
+          "icon": "$(mail)",
           "visibility": "collapsed"
         }
       ]
@@ -243,30 +246,30 @@
         "chatana.coordinatorModel": {
           "type": "string",
           "enum": [
-            "opus",
-            "sonnet",
-            "haiku"
+            "gpt-5",
+            "gpt-4.1",
+            "gpt-4.1-mini"
           ],
-          "default": "sonnet",
+          "default": "gpt-4.1",
           "enumDescriptions": [
-            "Claude Opus - Most capable, best for complex orchestration",
-            "Claude Sonnet - Balanced performance and speed (recommended)",
-            "Claude Haiku - Fastest, best for simple coordination tasks"
+            "Copilot GPT-5 - Most capable, best for complex orchestration",
+            "Copilot GPT-4.1 - Balanced performance and speed (recommended)",
+            "Copilot GPT-4.1 Mini - Fastest, best for simple coordination tasks"
           ],
           "description": "Model to use for the orchestrator agent"
         },
         "chatana.workerModel": {
           "type": "string",
           "enum": [
-            "opus",
-            "sonnet",
-            "haiku"
+            "gpt-5",
+            "gpt-4.1",
+            "gpt-4.1-mini"
           ],
-          "default": "sonnet",
+          "default": "gpt-4.1",
           "enumDescriptions": [
-            "Claude Opus - Most capable, best for complex tasks",
-            "Claude Sonnet - Balanced performance and speed (recommended)",
-            "Claude Haiku - Fastest, best for simple tasks"
+            "Copilot GPT-5 - Most capable, best for complex tasks",
+            "Copilot GPT-4.1 - Balanced performance and speed (recommended)",
+            "Copilot GPT-4.1 Mini - Fastest, best for simple tasks"
           ],
           "description": "Model to use for spawned worker agents"
         },
@@ -387,7 +390,6 @@
     "package": "npm run copy-docs && vsce package"
   },
   "dependencies": {
-    "@anthropic-ai/claude-agent-sdk": "^0.1.0",
     "js-yaml": "^4.1.0",
     "uuid": "^9.0.0",
     "zod": "^3.22.0"

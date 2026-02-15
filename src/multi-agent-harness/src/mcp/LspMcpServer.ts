@@ -39,7 +39,7 @@ interface HoverResult {
  */
 export async function createLspMcpTools(): Promise<any[]> {
   const { z } = await import("zod");
-  const { tool } = await import("@anthropic-ai/claude-agent-sdk");
+  const { tool } = await import("../runtime/OpenAIRuntime.js");
 
   return [
     tool(
@@ -55,7 +55,7 @@ export async function createLspMcpTools(): Promise<any[]> {
           const locations = await executeDefinitionProvider(
             args.filePath,
             args.line - 1,
-            args.character - 1
+            args.character - 1,
           );
           return formatLocationsResult(locations, "definition");
         } catch (error) {
@@ -68,7 +68,7 @@ export async function createLspMcpTools(): Promise<any[]> {
             ],
           };
         }
-      }
+      },
     ),
 
     tool(
@@ -78,7 +78,10 @@ export async function createLspMcpTools(): Promise<any[]> {
         filePath: z.string().describe("Absolute path to the file"),
         line: z.number().describe("Line number (1-based)"),
         character: z.number().describe("Character offset (1-based)"),
-        includeDeclaration: z.boolean().optional().describe("Include the declaration itself"),
+        includeDeclaration: z
+          .boolean()
+          .optional()
+          .describe("Include the declaration itself"),
       },
       async (args) => {
         try {
@@ -86,7 +89,7 @@ export async function createLspMcpTools(): Promise<any[]> {
             args.filePath,
             args.line - 1,
             args.character - 1,
-            args.includeDeclaration ?? true
+            args.includeDeclaration ?? true,
           );
           return formatLocationsResult(locations, "references");
         } catch (error) {
@@ -99,7 +102,7 @@ export async function createLspMcpTools(): Promise<any[]> {
             ],
           };
         }
-      }
+      },
     ),
 
     tool(
@@ -115,7 +118,7 @@ export async function createLspMcpTools(): Promise<any[]> {
           const hover = await executeHoverProvider(
             args.filePath,
             args.line - 1,
-            args.character - 1
+            args.character - 1,
           );
           return formatHoverResult(hover);
         } catch (error) {
@@ -128,7 +131,7 @@ export async function createLspMcpTools(): Promise<any[]> {
             ],
           };
         }
-      }
+      },
     ),
 
     tool(
@@ -151,7 +154,7 @@ export async function createLspMcpTools(): Promise<any[]> {
             ],
           };
         }
-      }
+      },
     ),
 
     tool(
@@ -174,7 +177,7 @@ export async function createLspMcpTools(): Promise<any[]> {
             ],
           };
         }
-      }
+      },
     ),
 
     tool(
@@ -190,7 +193,7 @@ export async function createLspMcpTools(): Promise<any[]> {
           const locations = await executeImplementationProvider(
             args.filePath,
             args.line - 1,
-            args.character - 1
+            args.character - 1,
           );
           return formatLocationsResult(locations, "implementations");
         } catch (error) {
@@ -203,7 +206,7 @@ export async function createLspMcpTools(): Promise<any[]> {
             ],
           };
         }
-      }
+      },
     ),
 
     tool(
@@ -219,7 +222,7 @@ export async function createLspMcpTools(): Promise<any[]> {
           const calls = await executeIncomingCallsProvider(
             args.filePath,
             args.line - 1,
-            args.character - 1
+            args.character - 1,
           );
           return formatCallHierarchyResult(calls, "incoming calls");
         } catch (error) {
@@ -232,7 +235,7 @@ export async function createLspMcpTools(): Promise<any[]> {
             ],
           };
         }
-      }
+      },
     ),
 
     tool(
@@ -248,7 +251,7 @@ export async function createLspMcpTools(): Promise<any[]> {
           const calls = await executeOutgoingCallsProvider(
             args.filePath,
             args.line - 1,
-            args.character - 1
+            args.character - 1,
           );
           return formatCallHierarchyResult(calls, "outgoing calls");
         } catch (error) {
@@ -261,7 +264,7 @@ export async function createLspMcpTools(): Promise<any[]> {
             ],
           };
         }
-      }
+      },
     ),
 
     tool(
@@ -284,7 +287,7 @@ export async function createLspMcpTools(): Promise<any[]> {
             ],
           };
         }
-      }
+      },
     ),
   ];
 }
@@ -296,7 +299,7 @@ export async function createLspMcpTools(): Promise<any[]> {
 async function executeDefinitionProvider(
   filePath: string,
   line: number,
-  character: number
+  character: number,
 ): Promise<LocationResult[]> {
   try {
     const uri = vscode.Uri.file(filePath);
@@ -305,7 +308,7 @@ async function executeDefinitionProvider(
     const result = await vscode.commands.executeCommand<vscode.Location[]>(
       "vscode.executeDefinitionProvider",
       uri,
-      position
+      position,
     );
 
     if (!result) {
@@ -314,7 +317,10 @@ async function executeDefinitionProvider(
 
     return result.map(locationToResult);
   } catch (error) {
-    console.error(`LSP definition provider failed for ${filePath}:${line}:${character}`, error);
+    console.error(
+      `LSP definition provider failed for ${filePath}:${line}:${character}`,
+      error,
+    );
     throw error;
   }
 }
@@ -323,7 +329,7 @@ async function executeReferenceProvider(
   filePath: string,
   line: number,
   character: number,
-  includeDeclaration: boolean
+  includeDeclaration: boolean,
 ): Promise<LocationResult[]> {
   try {
     const uri = vscode.Uri.file(filePath);
@@ -333,7 +339,7 @@ async function executeReferenceProvider(
       "vscode.executeReferenceProvider",
       uri,
       position,
-      { includeDeclaration }
+      { includeDeclaration },
     );
 
     if (!result) {
@@ -342,7 +348,10 @@ async function executeReferenceProvider(
 
     return result.map(locationToResult);
   } catch (error) {
-    console.error(`LSP reference provider failed for ${filePath}:${line}:${character}`, error);
+    console.error(
+      `LSP reference provider failed for ${filePath}:${line}:${character}`,
+      error,
+    );
     throw error;
   }
 }
@@ -350,7 +359,7 @@ async function executeReferenceProvider(
 async function executeHoverProvider(
   filePath: string,
   line: number,
-  character: number
+  character: number,
 ): Promise<HoverResult | null> {
   const uri = vscode.Uri.file(filePath);
   const position = new vscode.Position(line, character);
@@ -358,7 +367,7 @@ async function executeHoverProvider(
   const result = await vscode.commands.executeCommand<vscode.Hover[]>(
     "vscode.executeHoverProvider",
     uri,
-    position
+    position,
   );
 
   if (!result || result.length === 0) {
@@ -385,7 +394,7 @@ async function executeHoverProvider(
 }
 
 async function executeDocumentSymbolProvider(
-  filePath: string
+  filePath: string,
 ): Promise<SymbolResult[]> {
   try {
     const uri = vscode.Uri.file(filePath);
@@ -406,13 +415,12 @@ async function executeDocumentSymbolProvider(
 }
 
 async function executeWorkspaceSymbolProvider(
-  query: string
+  query: string,
 ): Promise<SymbolResult[]> {
   try {
-    const result = await vscode.commands.executeCommand<vscode.SymbolInformation[]>(
-      "vscode.executeWorkspaceSymbolProvider",
-      query
-    );
+    const result = await vscode.commands.executeCommand<
+      vscode.SymbolInformation[]
+    >("vscode.executeWorkspaceSymbolProvider", query);
 
     if (!result) {
       return [];
@@ -420,7 +428,10 @@ async function executeWorkspaceSymbolProvider(
 
     return result.map(symbolToResult);
   } catch (error) {
-    console.error(`LSP workspace symbol provider failed for query: ${query}`, error);
+    console.error(
+      `LSP workspace symbol provider failed for query: ${query}`,
+      error,
+    );
     throw error;
   }
 }
@@ -428,7 +439,7 @@ async function executeWorkspaceSymbolProvider(
 async function executeImplementationProvider(
   filePath: string,
   line: number,
-  character: number
+  character: number,
 ): Promise<LocationResult[]> {
   try {
     const uri = vscode.Uri.file(filePath);
@@ -437,7 +448,7 @@ async function executeImplementationProvider(
     const result = await vscode.commands.executeCommand<vscode.Location[]>(
       "vscode.executeImplementationProvider",
       uri,
-      position
+      position,
     );
 
     if (!result) {
@@ -446,7 +457,10 @@ async function executeImplementationProvider(
 
     return result.map(locationToResult);
   } catch (error) {
-    console.error(`LSP implementation provider failed for ${filePath}:${line}:${character}`, error);
+    console.error(
+      `LSP implementation provider failed for ${filePath}:${line}:${character}`,
+      error,
+    );
     throw error;
   }
 }
@@ -454,27 +468,24 @@ async function executeImplementationProvider(
 async function executeIncomingCallsProvider(
   filePath: string,
   line: number,
-  character: number
+  character: number,
 ): Promise<vscode.CallHierarchyIncomingCall[]> {
   const uri = vscode.Uri.file(filePath);
   const position = new vscode.Position(line, character);
 
   // First, prepare the call hierarchy item
-  const items = await vscode.commands.executeCommand<vscode.CallHierarchyItem[]>(
-    "vscode.prepareCallHierarchy",
-    uri,
-    position
-  );
+  const items = await vscode.commands.executeCommand<
+    vscode.CallHierarchyItem[]
+  >("vscode.prepareCallHierarchy", uri, position);
 
   if (!items || items.length === 0) {
     return [];
   }
 
   // Then get incoming calls
-  const result = await vscode.commands.executeCommand<vscode.CallHierarchyIncomingCall[]>(
-    "vscode.provideIncomingCalls",
-    items[0]
-  );
+  const result = await vscode.commands.executeCommand<
+    vscode.CallHierarchyIncomingCall[]
+  >("vscode.provideIncomingCalls", items[0]);
 
   return result ?? [];
 }
@@ -482,27 +493,24 @@ async function executeIncomingCallsProvider(
 async function executeOutgoingCallsProvider(
   filePath: string,
   line: number,
-  character: number
+  character: number,
 ): Promise<vscode.CallHierarchyOutgoingCall[]> {
   const uri = vscode.Uri.file(filePath);
   const position = new vscode.Position(line, character);
 
   // First, prepare the call hierarchy item
-  const items = await vscode.commands.executeCommand<vscode.CallHierarchyItem[]>(
-    "vscode.prepareCallHierarchy",
-    uri,
-    position
-  );
+  const items = await vscode.commands.executeCommand<
+    vscode.CallHierarchyItem[]
+  >("vscode.prepareCallHierarchy", uri, position);
 
   if (!items || items.length === 0) {
     return [];
   }
 
   // Then get outgoing calls
-  const result = await vscode.commands.executeCommand<vscode.CallHierarchyOutgoingCall[]>(
-    "vscode.provideOutgoingCalls",
-    items[0]
-  );
+  const result = await vscode.commands.executeCommand<
+    vscode.CallHierarchyOutgoingCall[]
+  >("vscode.provideOutgoingCalls", items[0]);
 
   return result ?? [];
 }
@@ -537,7 +545,7 @@ function rangeToResult(range: vscode.Range): LocationResult["range"] {
 }
 
 function symbolToResult(
-  symbol: vscode.SymbolInformation | vscode.DocumentSymbol
+  symbol: vscode.SymbolInformation | vscode.DocumentSymbol,
 ): SymbolResult {
   const kindName = vscode.SymbolKind[symbol.kind];
 
@@ -562,7 +570,7 @@ function symbolToResult(
 
 function formatLocationsResult(
   locations: LocationResult[],
-  type: string
+  type: string,
 ): { content: { type: "text"; text: string }[] } {
   if (locations.length === 0) {
     return {
@@ -571,7 +579,10 @@ function formatLocationsResult(
   }
 
   const formatted = locations
-    .map((loc) => `${loc.uri}:${loc.range.start.line}:${loc.range.start.character}`)
+    .map(
+      (loc) =>
+        `${loc.uri}:${loc.range.start.line}:${loc.range.start.character}`,
+    )
     .join("\n");
 
   return {
@@ -586,7 +597,7 @@ function formatLocationsResult(
 
 function formatSymbolsResult(
   symbols: SymbolResult[],
-  type: string
+  type: string,
 ): { content: { type: "text"; text: string }[] } {
   if (symbols.length === 0) {
     return {
@@ -599,8 +610,8 @@ function formatSymbolsResult(
       const loc = s.location
         ? ` @ ${s.location.uri}:${s.location.range.start.line}`
         : s.range
-        ? `:${s.range.start.line}`
-        : "";
+          ? `:${s.range.start.line}`
+          : "";
       const container = s.containerName ? ` (in ${s.containerName})` : "";
       return `[${s.kind}] ${s.name}${container}${loc}`;
     })
@@ -616,9 +627,9 @@ function formatSymbolsResult(
   };
 }
 
-function formatHoverResult(
-  hover: HoverResult | null
-): { content: { type: "text"; text: string }[] } {
+function formatHoverResult(hover: HoverResult | null): {
+  content: { type: "text"; text: string }[];
+} {
   if (!hover) {
     return {
       content: [{ type: "text", text: "No hover information available." }],
@@ -631,8 +642,11 @@ function formatHoverResult(
 }
 
 function formatCallHierarchyResult(
-  calls: (vscode.CallHierarchyIncomingCall | vscode.CallHierarchyOutgoingCall)[],
-  type: string
+  calls: (
+    | vscode.CallHierarchyIncomingCall
+    | vscode.CallHierarchyOutgoingCall
+  )[],
+  type: string,
 ): { content: { type: "text"; text: string }[] } {
   if (calls.length === 0) {
     return {
@@ -657,9 +671,9 @@ function formatCallHierarchyResult(
   };
 }
 
-function formatDiagnosticsResult(
-  diagnostics: vscode.Diagnostic[]
-): { content: { type: "text"; text: string }[] } {
+function formatDiagnosticsResult(diagnostics: vscode.Diagnostic[]): {
+  content: { type: "text"; text: string }[];
+} {
   if (diagnostics.length === 0) {
     return {
       content: [{ type: "text", text: "No diagnostics found." }],

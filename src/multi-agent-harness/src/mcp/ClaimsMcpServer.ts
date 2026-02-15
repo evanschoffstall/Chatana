@@ -23,7 +23,7 @@ export function getGlobalClaimsTracker(): ClaimsTracker {
  */
 export async function createClaimsMcpTools(agentName: string): Promise<any[]> {
   const { z } = await import("zod");
-  const { tool } = await import("@anthropic-ai/claude-agent-sdk");
+  const { tool } = await import("../runtime/OpenAIRuntime.js");
 
   const tracker = getGlobalClaimsTracker();
 
@@ -33,11 +33,15 @@ export async function createClaimsMcpTools(agentName: string): Promise<any[]> {
       "Reserve file paths before editing to prevent conflicts with other agents. " +
         "Use glob patterns like 'src/components/*.tsx' or specific paths.",
       {
-        paths: z.array(z.string()).describe("File paths or glob patterns to reserve"),
+        paths: z
+          .array(z.string())
+          .describe("File paths or glob patterns to reserve"),
         exclusive: z
           .boolean()
           .optional()
-          .describe("If true, no other agent can claim these paths (default: true)"),
+          .describe(
+            "If true, no other agent can claim these paths (default: true)",
+          ),
         reason: z.string().optional().describe("Why you need these files"),
         ttlMinutes: z
           .number()
@@ -55,7 +59,9 @@ export async function createClaimsMcpTools(agentName: string): Promise<any[]> {
             const existingClaims = tracker.getClaimsForPath(path);
             for (const claim of existingClaims) {
               if (claim.agentName !== agentName && claim.exclusive) {
-                conflicts.push(`${path} is exclusively claimed by ${claim.agentName}`);
+                conflicts.push(
+                  `${path} is exclusively claimed by ${claim.agentName}`,
+                );
               }
             }
           }
@@ -72,7 +78,13 @@ export async function createClaimsMcpTools(agentName: string): Promise<any[]> {
           }
 
           // Add claims
-          tracker.addClaims(agentName, args.paths, exclusive, args.reason, ttlSeconds);
+          tracker.addClaims(
+            agentName,
+            args.paths,
+            exclusive,
+            args.reason,
+            ttlSeconds,
+          );
         } catch (error) {
           return {
             content: [
@@ -92,7 +104,7 @@ export async function createClaimsMcpTools(agentName: string): Promise<any[]> {
             },
           ],
         };
-      }
+      },
     ),
 
     tool(
@@ -121,7 +133,7 @@ export async function createClaimsMcpTools(agentName: string): Promise<any[]> {
             ],
           };
         }
-      }
+      },
     ),
 
     tool(
@@ -169,7 +181,7 @@ export async function createClaimsMcpTools(agentName: string): Promise<any[]> {
             ],
           };
         }
-      }
+      },
     ),
 
     tool(
@@ -184,10 +196,14 @@ export async function createClaimsMcpTools(agentName: string): Promise<any[]> {
 
           for (const path of args.paths) {
             const claims = tracker.getClaimsForPath(path);
-            const exclusiveClaims = claims.filter((c) => c.exclusive && c.agentName !== agentName);
+            const exclusiveClaims = claims.filter(
+              (c) => c.exclusive && c.agentName !== agentName,
+            );
 
             if (exclusiveClaims.length > 0) {
-              results.push(`${path}: UNAVAILABLE (claimed by ${exclusiveClaims.map((c) => c.agentName).join(", ")})`);
+              results.push(
+                `${path}: UNAVAILABLE (claimed by ${exclusiveClaims.map((c) => c.agentName).join(", ")})`,
+              );
             } else if (claims.length > 0) {
               results.push(`${path}: available (shared claims exist)`);
             } else {
@@ -213,7 +229,7 @@ export async function createClaimsMcpTools(agentName: string): Promise<any[]> {
             ],
           };
         }
-      }
+      },
     ),
   ];
 }

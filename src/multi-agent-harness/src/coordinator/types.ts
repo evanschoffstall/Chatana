@@ -110,7 +110,11 @@ export interface CompleteOutput extends AgentOutputBase {
 /**
  * Union type for all agent outputs
  */
-export type AgentOutput = TextOutput | SystemOutput | ToolCallOutput | CompleteOutput;
+export type AgentOutput =
+  | TextOutput
+  | SystemOutput
+  | ToolCallOutput
+  | CompleteOutput;
 
 /**
  * Tool definition for Claude
@@ -213,7 +217,14 @@ export interface ToolCallInfo {
 /**
  * Agent status type
  */
-export type AgentStatus = "initializing" | "idle" | "processing" | "paused" | "error" | "waiting" | "complete";
+export type AgentStatus =
+  | "initializing"
+  | "idle"
+  | "processing"
+  | "paused"
+  | "error"
+  | "waiting"
+  | "complete";
 
 /**
  * SDK message types (from Claude Agent SDK)
@@ -243,7 +254,11 @@ export interface SDKUserMessageType {
 
 export interface SDKResultMessageType {
   type: "result";
-  subtype: "success" | "error_during_execution" | "error_max_turns" | "error_max_budget_usd";
+  subtype:
+    | "success"
+    | "error_during_execution"
+    | "error_max_turns"
+    | "error_max_budget_usd";
   session_id: string;
   total_cost_usd: number;
   duration_ms: number;
@@ -269,7 +284,6 @@ export interface SDKContentBlock {
   name?: string;
   input?: Record<string, unknown>;
 }
-
 
 /**
  * Events emitted by AgentPool
@@ -309,5 +323,4 @@ export interface ExtendedAgentConfig {
   color: string;
   initialStatus?: AgentStatus;
   outputChannel?: { appendLine: (value: string) => void };
-  pathToClaudeCodeExecutable?: string;
 }

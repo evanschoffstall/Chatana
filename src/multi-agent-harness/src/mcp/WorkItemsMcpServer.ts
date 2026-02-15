@@ -1,4 +1,4 @@
-import { WorkItemStatus, WorkItemPriority } from "../kanban/types";
+import { WorkItemPriority, WorkItemStatus } from "../kanban/types";
 
 /**
  * Creates MCP tools for Kanban work item management.
@@ -17,9 +17,11 @@ import { WorkItemStatus, WorkItemPriority } from "../kanban/types";
  *
  * @param agentName - The name of the agent these tools are for
  */
-export async function createWorkItemsMcpTools(agentName: string): Promise<any[]> {
+export async function createWorkItemsMcpTools(
+  agentName: string,
+): Promise<any[]> {
   const { z } = await import("zod");
-  const { tool } = await import("@anthropic-ai/claude-agent-sdk");
+  const { tool } = await import("../runtime/OpenAIRuntime.js");
   const { getWorkItemManager } = await import("../kanban");
 
   return [
@@ -35,7 +37,9 @@ export async function createWorkItemsMcpTools(agentName: string): Promise<any[]>
       async (args) => {
         try {
           const manager = getWorkItemManager();
-          const items = await manager.listItems(args.status as WorkItemStatus | undefined);
+          const items = await manager.listItems(
+            args.status as WorkItemStatus | undefined,
+          );
 
           if (items.length === 0) {
             return {
@@ -52,9 +56,13 @@ export async function createWorkItemsMcpTools(agentName: string): Promise<any[]>
 
           const formatted = items
             .map((item: any) => {
-              const assignee = item.assignee ? `@${item.assignee}` : "unassigned";
+              const assignee = item.assignee
+                ? `@${item.assignee}`
+                : "unassigned";
               const priority = `[${item.priority.toUpperCase()}]`;
-              const feature = item.featureRef ? ` [Feature: ${item.featureRef}]` : "";
+              const feature = item.featureRef
+                ? ` [Feature: ${item.featureRef}]`
+                : "";
               return `${item.id} ${priority} ${item.title} - ${assignee} (${item.status})${feature}`;
             })
             .join("\n");
@@ -77,7 +85,7 @@ export async function createWorkItemsMcpTools(agentName: string): Promise<any[]>
             ],
           };
         }
-      }
+      },
     ),
 
     tool(
@@ -105,7 +113,7 @@ export async function createWorkItemsMcpTools(agentName: string): Promise<any[]>
           const details = [
             `ID: ${item.id}`,
             `Title: ${item.title}`,
-            `Type: ${item.type || 'story'}`,
+            `Type: ${item.type || "story"}`,
             `Status: ${item.status}`,
             `Priority: ${item.priority}`,
             `Feature: ${item.featureRef || "none"}`,
@@ -137,7 +145,7 @@ export async function createWorkItemsMcpTools(agentName: string): Promise<any[]>
             ],
           };
         }
-      }
+      },
     ),
 
     tool(
@@ -145,15 +153,33 @@ export async function createWorkItemsMcpTools(agentName: string): Promise<any[]>
       "Create a new User Story in the todo column. User Stories represent discrete units of work derived from Features (ADR/Investigation documents). When working on a task related to an ADR or investigation, link it to the feature using featureRef.",
       {
         title: z.string().describe("Short title for the User Story"),
-        description: z.string().describe("Detailed description of what needs to be done"),
-        acceptanceCriteria: z.string().optional().describe("Bullet-pointed list of acceptance criteria that define when this task is complete (e.g., '- Unit tests pass\\n- API returns 200')"),
+        description: z
+          .string()
+          .describe("Detailed description of what needs to be done"),
+        acceptanceCriteria: z
+          .string()
+          .optional()
+          .describe(
+            "Bullet-pointed list of acceptance criteria that define when this task is complete (e.g., '- Unit tests pass\\n- API returns 200')",
+          ),
         priority: z
           .enum(["critical", "high", "medium", "low"])
           .default("medium")
           .describe("Priority level"),
-        tags: z.array(z.string()).optional().describe("Tags for categorization"),
-        estimatedHours: z.number().optional().describe("Estimated AGENT HOURS to complete (not human hours)"),
-        featureRef: z.string().optional().describe("Reference to parent feature folder (e.g., 'docs/features/kanban-workitems'). Use this when creating stories for ADR/investigation tasks."),
+        tags: z
+          .array(z.string())
+          .optional()
+          .describe("Tags for categorization"),
+        estimatedHours: z
+          .number()
+          .optional()
+          .describe("Estimated AGENT HOURS to complete (not human hours)"),
+        featureRef: z
+          .string()
+          .optional()
+          .describe(
+            "Reference to parent feature folder (e.g., 'docs/features/kanban-workitems'). Use this when creating stories for ADR/investigation tasks.",
+          ),
       },
       async (args) => {
         try {
@@ -168,7 +194,9 @@ export async function createWorkItemsMcpTools(agentName: string): Promise<any[]>
             featureRef: args.featureRef,
           });
 
-          const featureInfo = item.featureRef ? ` (Feature: ${item.featureRef})` : '';
+          const featureInfo = item.featureRef
+            ? ` (Feature: ${item.featureRef})`
+            : "";
           return {
             content: [
               {
@@ -187,7 +215,7 @@ export async function createWorkItemsMcpTools(agentName: string): Promise<any[]>
             ],
           };
         }
-      }
+      },
     ),
 
     tool(
@@ -222,7 +250,7 @@ export async function createWorkItemsMcpTools(agentName: string): Promise<any[]>
             ],
           };
         }
-      }
+      },
     ),
 
     tool(
@@ -254,7 +282,7 @@ export async function createWorkItemsMcpTools(agentName: string): Promise<any[]>
             ],
           };
         }
-      }
+      },
     ),
 
     tool(
@@ -310,7 +338,7 @@ export async function createWorkItemsMcpTools(agentName: string): Promise<any[]>
             ],
           };
         }
-      }
+      },
     ),
 
     tool(
@@ -324,7 +352,10 @@ export async function createWorkItemsMcpTools(agentName: string): Promise<any[]>
           .enum(["critical", "high", "medium", "low"])
           .optional()
           .describe("New priority"),
-        tags: z.array(z.string()).optional().describe("New tags (replaces existing)"),
+        tags: z
+          .array(z.string())
+          .optional()
+          .describe("New tags (replaces existing)"),
       },
       async (args) => {
         try {
@@ -332,8 +363,10 @@ export async function createWorkItemsMcpTools(agentName: string): Promise<any[]>
           const updates: any = {};
 
           if (args.title !== undefined) updates.title = args.title;
-          if (args.description !== undefined) updates.description = args.description;
-          if (args.priority !== undefined) updates.priority = args.priority as WorkItemPriority;
+          if (args.description !== undefined)
+            updates.description = args.description;
+          if (args.priority !== undefined)
+            updates.priority = args.priority as WorkItemPriority;
           if (args.tags !== undefined) updates.tags = args.tags;
 
           if (Object.keys(updates).length === 0) {
@@ -368,7 +401,7 @@ export async function createWorkItemsMcpTools(agentName: string): Promise<any[]>
             ],
           };
         }
-      }
+      },
     ),
 
     tool(
@@ -401,7 +434,7 @@ export async function createWorkItemsMcpTools(agentName: string): Promise<any[]>
             ],
           };
         }
-      }
+      },
     ),
 
     tool(
@@ -434,7 +467,7 @@ export async function createWorkItemsMcpTools(agentName: string): Promise<any[]>
             ],
           };
         }
-      }
+      },
     ),
 
     tool(
@@ -466,7 +499,7 @@ export async function createWorkItemsMcpTools(agentName: string): Promise<any[]>
             ],
           };
         }
-      }
+      },
     ),
   ];
 }

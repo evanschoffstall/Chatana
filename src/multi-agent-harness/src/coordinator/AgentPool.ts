@@ -1,18 +1,18 @@
-import * as vscode from "vscode";
 import { EventEmitter } from "events";
-import { AgentSession } from "./AgentSession";
-import { getGlobalClaimsTracker } from "../mcp/ClaimsMcpServer";
+import * as vscode from "vscode";
 import { AgentMailClient } from "../mcp/AgentMailClient";
+import { getGlobalClaimsTracker } from "../mcp/ClaimsMcpServer";
 import { generateUniqueAgentName } from "../utils/agentNaming";
+import { AgentSession } from "./AgentSession";
 import {
-  SpawnConfig,
-  AgentPoolStatus,
-  AgentOutput,
-  ToolCallOutput,
-  FileClaim,
   AgentMessage,
-  McpServerConfig,
+  AgentOutput,
+  AgentPoolStatus,
   ExtendedAgentConfig,
+  FileClaim,
+  McpServerConfig,
+  SpawnConfig,
+  ToolCallOutput,
 } from "./types";
 
 /**
@@ -56,12 +56,10 @@ export class AgentPool extends EventEmitter {
   private readonly pendingAgents = new Map<string, SpawnConfig>();
   private readonly claimsTracker;
   private readonly outputChannel: vscode.OutputChannel;
-  private readonly extensionContext: vscode.ExtensionContext;
   private colorIndex = 0;
 
-  constructor(context: vscode.ExtensionContext) {
+  constructor(_context: vscode.ExtensionContext) {
     super();
-    this.extensionContext = context;
     this.outputChannel = vscode.window.createOutputChannel("Multi-Agent Pool");
     // Use the global claims tracker shared with MCP tools
     this.claimsTracker = getGlobalClaimsTracker();
@@ -93,7 +91,7 @@ export class AgentPool extends EventEmitter {
       ]);
       uniqueName = generateUniqueAgentName(config.name, existingNames);
       this.outputChannel.appendLine(
-        `Agent name '${config.name}' already exists, using unique name: ${uniqueName}`
+        `Agent name '${config.name}' already exists, using unique name: ${uniqueName}`,
       );
       // Update config with the unique name
       config = { ...config, name: uniqueName };
@@ -102,14 +100,16 @@ export class AgentPool extends EventEmitter {
     // Check if dependencies are satisfied
     // An agent is waiting if the dependency doesn't exist yet OR if it exists but isn't complete
     const unsatisfied = config.waitFor.filter(
-      (dep) => !this.sessions.has(dep) || this.sessions.get(dep)!.status !== "complete"
+      (dep) =>
+        !this.sessions.has(dep) ||
+        this.sessions.get(dep)!.status !== "complete",
     );
 
     if (unsatisfied.length > 0) {
       // Queue for later
       this.pendingAgents.set(config.name, config);
       this.outputChannel.appendLine(
-        `${config.name} queued, waiting for: ${unsatisfied.join(", ")}`
+        `${config.name} queued, waiting for: ${unsatisfied.join(", ")}`,
       );
       return this.createPlaceholderSession(config);
     }
@@ -125,7 +125,8 @@ export class AgentPool extends EventEmitter {
     const userMcpServers = this.getMcpServers();
 
     // Create extension MCP server with all chatana tools (work items, memory, etc.)
-    const { createExtensionMcpServer } = await import("../mcp/ExtensionMcpServer");
+    const { createExtensionMcpServer } =
+      await import("../mcp/ExtensionMcpServer.js");
     const extensionMcpServer = await createExtensionMcpServer(config.name);
 
     // Merge extension server with user-configured servers
@@ -133,16 +134,6 @@ export class AgentPool extends EventEmitter {
       chatana: extensionMcpServer,
       ...userMcpServers,
     };
-
-    // Construct path to Claude Code CLI bundled with the extension
-    const path = require("path");
-    const pathToClaudeCodeExecutable = path.join(
-      this.extensionContext.extensionPath,
-      "node_modules",
-      "@anthropic-ai",
-      "claude-agent-sdk",
-      "cli.js"
-    );
 
     const sessionConfig: ExtendedAgentConfig = {
       name: config.name,
@@ -153,7 +144,6 @@ export class AgentPool extends EventEmitter {
       mcpServers,
       color,
       outputChannel: this.outputChannel,
-      pathToClaudeCodeExecutable,
     };
 
     const session = new AgentSession(sessionConfig);
@@ -182,7 +172,7 @@ export class AgentPool extends EventEmitter {
 
     // Start the agent with its focus task
     await session.sendPrompt(
-      `Your task: ${config.focus}\n\nBegin working on this now. Claim any files you need to edit.`
+      `Your task: ${config.focus}\n\nBegin working on this now. Claim any files you need to edit.`,
     );
 
     return session;
@@ -198,7 +188,7 @@ When you complete your task:
 1. Call add_workitem_note("${config.workItemId}", "your summary") to document what you did
 2. Call move_workitem("${config.workItemId}", "code-review") to mark as ready for review
 3. Send a completion message to the orchestrator\n`
-      : '';
+      : "";
 
     return `${config.systemPrompt}
 
@@ -239,15 +229,19 @@ Check your inbox:
         (dep) =>
           dep !== completedAgent &&
           this.sessions.has(dep) &&
-          this.sessions.get(dep)!.status !== "complete"
+          this.sessions.get(dep)!.status !== "complete",
       );
 
       if (stillWaiting.length === 0) {
         this.pendingAgents.delete(name);
-        this.outputChannel.appendLine(`${name} dependencies satisfied, spawning...`);
+        this.outputChannel.appendLine(
+          `${name} dependencies satisfied, spawning...`,
+        );
         // Await the spawn to prevent race conditions
         void this.doSpawnAgent(config).catch((error) => {
-          this.outputChannel.appendLine(`Error spawning ${name}: ${error instanceof Error ? error.message : String(error)}`);
+          this.outputChannel.appendLine(
+            `Error spawning ${name}: ${error instanceof Error ? error.message : String(error)}`,
+          );
           this.emit("agentError", name, error);
         });
       }
@@ -289,27 +283,34 @@ Check your inbox:
   /**
    * Handle tool calls from agents, routing messages and tracking claims
    */
-  private async handleToolCall(agentName: string, toolCall: ToolCallOutput): Promise<void> {
+  private async handleToolCall(
+    agentName: string,
+    toolCall: ToolCallOutput,
+  ): Promise<void> {
     try {
       const { name, arguments: args } = toolCall;
 
       // Validate arguments exist
-      if (!args || typeof args !== 'object') {
-        this.outputChannel.appendLine(`Warning: Tool call ${name} has invalid arguments`);
+      if (!args || typeof args !== "object") {
+        this.outputChannel.appendLine(
+          `Warning: Tool call ${name} has invalid arguments`,
+        );
         return;
       }
 
       // Route send_message to recipient
       if (name === "send_message") {
         // Validate required fields
-        if (typeof args.to !== 'string' || typeof args.subject !== 'string') {
-          this.outputChannel.appendLine(`Warning: send_message missing required fields`);
+        if (typeof args.to !== "string" || typeof args.subject !== "string") {
+          this.outputChannel.appendLine(
+            `Warning: send_message missing required fields`,
+          );
           return;
         }
 
         const to = args.to as string;
         const subject = args.subject as string;
-        const body = (args.body as string | undefined) ?? '';
+        const body = (args.body as string | undefined) ?? "";
 
         const message: AgentMessage = {
           id: crypto.randomUUID(),
@@ -327,7 +328,7 @@ Check your inbox:
         const recipient = this.sessions.get(to);
         if (recipient && recipient.status !== "waiting") {
           await recipient.injectNotification(
-            `New message from ${agentName}.\nSubject: "${subject}"\nUse inbox() to read.`
+            `New message from ${agentName}.\nSubject: "${subject}"\nUse inbox() to read.`,
           );
         }
       }
@@ -336,13 +337,15 @@ Check your inbox:
       if (name === "reserve_file_paths") {
         // Validate required fields
         if (!Array.isArray(args.paths)) {
-          this.outputChannel.appendLine(`Warning: reserve_file_paths missing paths array`);
+          this.outputChannel.appendLine(
+            `Warning: reserve_file_paths missing paths array`,
+          );
           return;
         }
 
         const paths = args.paths as string[];
         const exclusive = (args.exclusive as boolean | undefined) ?? false;
-        const reason = (args.reason as string | undefined) ?? '';
+        const reason = (args.reason as string | undefined) ?? "";
         const ttl = (args.ttl as number | undefined) ?? 3600000; // Default 1 hour
 
         this.claimsTracker.addClaims(agentName, paths, exclusive, reason, ttl);
@@ -355,9 +358,16 @@ Check your inbox:
         this.emit("claimsUpdated", this.claimsTracker.getAllClaims());
       }
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      this.outputChannel.appendLine(`Error handling tool call from ${agentName}: ${errorMessage}`);
-      this.emit("agentError", agentName, error instanceof Error ? error : new Error(errorMessage));
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
+      this.outputChannel.appendLine(
+        `Error handling tool call from ${agentName}: ${errorMessage}`,
+      );
+      this.emit(
+        "agentError",
+        agentName,
+        error instanceof Error ? error : new Error(errorMessage),
+      );
     }
   }
 
@@ -389,7 +399,8 @@ Check your inbox:
         id: crypto.randomUUID(),
         from: "orchestrator",
         to: agentName,
-        subject: message.length > 50 ? message.substring(0, 50) + "..." : message,
+        subject:
+          message.length > 50 ? message.substring(0, 50) + "..." : message,
         body: message,
         timestamp: new Date(),
         read: false,
@@ -429,14 +440,19 @@ Check your inbox:
    */
   getStatus(): AgentPoolStatus {
     return {
-      activeAgents: Array.from(this.sessions.entries()).map(([name, session]) => ({
-        name,
-        role: session.role,
-        status: session.status,
-        focus: session.focus,
-      })),
+      activeAgents: Array.from(this.sessions.entries()).map(
+        ([name, session]) => ({
+          name,
+          role: session.role,
+          status: session.status,
+          focus: session.focus,
+        }),
+      ),
       pendingAgents: Array.from(this.pendingAgents.keys()),
-      totalCost: Array.from(this.sessions.values()).reduce((sum, s) => sum + s.costUsd, 0),
+      totalCost: Array.from(this.sessions.values()).reduce(
+        (sum, s) => sum + s.costUsd,
+        0,
+      ),
     };
   }
 
@@ -493,7 +509,8 @@ Check your inbox:
    */
   private getNextColor(): string {
     const config = vscode.workspace.getConfiguration("multiAgent");
-    const palette = config.get<string[]>("agentColorPalette") ?? DEFAULT_COLOR_PALETTE;
+    const palette =
+      config.get<string[]>("agentColorPalette") ?? DEFAULT_COLOR_PALETTE;
     const color = palette[this.colorIndex % palette.length];
     this.colorIndex++;
     return color;

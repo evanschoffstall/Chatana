@@ -38,11 +38,23 @@ export const AgentDefaultsSchema = z.object({
 
 // Hook trigger schemas
 export const HookTriggerSchema = z.union([
-  z.object({ type: z.literal("onAgentFinished"), agentName: z.string().optional() }),
-  z.object({ type: z.literal("onAgentError"), agentName: z.string().optional() }),
-  z.object({ type: z.literal("onAgentSpawned"), agentName: z.string().optional() }),
+  z.object({
+    type: z.literal("onAgentFinished"),
+    agentName: z.string().optional(),
+  }),
+  z.object({
+    type: z.literal("onAgentError"),
+    agentName: z.string().optional(),
+  }),
+  z.object({
+    type: z.literal("onAgentSpawned"),
+    agentName: z.string().optional(),
+  }),
   z.object({ type: z.literal("onFileSaved"), pattern: z.string().optional() }),
-  z.object({ type: z.literal("onFileCreated"), pattern: z.string().optional() }),
+  z.object({
+    type: z.literal("onFileCreated"),
+    pattern: z.string().optional(),
+  }),
   z.object({ type: z.literal("onBuildSuccess") }),
   z.object({ type: z.literal("onBuildFailure") }),
   z.object({ type: z.literal("onTestsPass") }),
@@ -89,7 +101,10 @@ export const HookActionSchema = z.union([
   z.object({ type: z.literal("sendMessage"), config: SendMessageActionSchema }),
   z.object({ type: z.literal("runCommand"), config: RunCommandActionSchema }),
   z.object({ type: z.literal("promptHuman"), config: PromptHumanActionSchema }),
-  z.object({ type: z.literal("updateMemory"), config: UpdateMemoryActionSchema }),
+  z.object({
+    type: z.literal("updateMemory"),
+    config: UpdateMemoryActionSchema,
+  }),
 ]);
 
 // Hook condition schema
@@ -190,7 +205,9 @@ export const MemorySearchOptionsSchema = z.object({
   createdAfter: z.date().optional(),
   usedAfter: z.date().optional(),
   limit: z.number().int().min(1).optional(),
-  sortBy: z.enum(["createdAt", "lastUsed", "useCount", "confidence"]).optional(),
+  sortBy: z
+    .enum(["createdAt", "lastUsed", "useCount", "confidence"])
+    .optional(),
   sortOrder: z.enum(["asc", "desc"]).optional(),
 });
 
@@ -231,7 +248,9 @@ export function validateMemoryEntry(data: unknown): {
     return { success: true, data: result };
   } catch (error) {
     if (error instanceof z.ZodError) {
-      const issues = error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; ");
+      const issues = error.issues
+        .map((i) => `${i.path.join(".")}: ${i.message}`)
+        .join("; ");
       return { success: false, error: issues };
     }
     return { success: false, error: String(error) };
@@ -251,7 +270,9 @@ export function validateMemoryFile(data: unknown): {
     return { success: true, data: result };
   } catch (error) {
     if (error instanceof z.ZodError) {
-      const issues = error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; ");
+      const issues = error.issues
+        .map((i) => `${i.path.join(".")}: ${i.message}`)
+        .join("; ");
       return { success: false, error: issues };
     }
     return { success: false, error: String(error) };
@@ -271,7 +292,9 @@ export function validateCreateMemoryEntry(data: unknown): {
     return { success: true, data: result };
   } catch (error) {
     if (error instanceof z.ZodError) {
-      const issues = error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; ");
+      const issues = error.issues
+        .map((i) => `${i.path.join(".")}: ${i.message}`)
+        .join("; ");
       return { success: false, error: issues };
     }
     return { success: false, error: String(error) };
@@ -291,7 +314,9 @@ export function validateUpdateMemoryEntry(data: unknown): {
     return { success: true, data: result };
   } catch (error) {
     if (error instanceof z.ZodError) {
-      const issues = error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; ");
+      const issues = error.issues
+        .map((i) => `${i.path.join(".")}: ${i.message}`)
+        .join("; ");
       return { success: false, error: issues };
     }
     return { success: false, error: String(error) };
@@ -299,7 +324,19 @@ export function validateUpdateMemoryEntry(data: unknown): {
 }
 
 // Model configuration schemas
-export const ClaudeModelConfigSchema = z.object({
+export const CopilotModelConfigSchema = z.object({
+  provider: z.literal("copilot"),
+  modelId: z.string(),
+  apiKeyEnv: z.string().optional(),
+});
+
+export const LegacyOpenAIModelConfigSchema = z.object({
+  provider: z.literal("openai"),
+  modelId: z.string(),
+  apiKeyEnv: z.string().optional(),
+});
+
+export const LegacyClaudeModelConfigSchema = z.object({
   provider: z.literal("claude"),
   modelId: z.string(),
   apiKeyEnv: z.string().optional(),
@@ -311,7 +348,12 @@ export const VSCodeLLMConfigSchema = z.object({
   version: z.string().optional(),
 });
 
-export const ModelConfigSchema = z.union([ClaudeModelConfigSchema, VSCodeLLMConfigSchema]);
+export const ModelConfigSchema = z.union([
+  CopilotModelConfigSchema,
+  LegacyOpenAIModelConfigSchema,
+  LegacyClaudeModelConfigSchema,
+  VSCodeLLMConfigSchema,
+]);
 
 // Agent profile schema
 export const AgentProfileSchema = z.object({
@@ -365,7 +407,9 @@ export function validateChatanaConfig(data: unknown): {
     return { success: true, data: result };
   } catch (error) {
     if (error instanceof z.ZodError) {
-      const issues = error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; ");
+      const issues = error.issues
+        .map((i) => `${i.path.join(".")}: ${i.message}`)
+        .join("; ");
       return { success: false, error: issues };
     }
     return { success: false, error: String(error) };
@@ -382,7 +426,9 @@ export function validateAgentProfile(data: unknown): {
     return { success: true, data: result };
   } catch (error) {
     if (error instanceof z.ZodError) {
-      const issues = error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; ");
+      const issues = error.issues
+        .map((i) => `${i.path.join(".")}: ${i.message}`)
+        .join("; ");
       return { success: false, error: issues };
     }
     return { success: false, error: String(error) };
@@ -399,7 +445,9 @@ export function validateHookConfig(data: unknown): {
     return { success: true, data: result };
   } catch (error) {
     if (error instanceof z.ZodError) {
-      const issues = error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; ");
+      const issues = error.issues
+        .map((i) => `${i.path.join(".")}: ${i.message}`)
+        .join("; ");
       return { success: false, error: issues };
     }
     return { success: false, error: String(error) };

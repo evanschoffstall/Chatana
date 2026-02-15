@@ -1,15 +1,15 @@
 import { EventEmitter } from "events";
 import {
-  AgentStatus,
-  ChatMessage,
-  AgentOutput,
-  McpServerConfig,
-  SDKMessage,
-} from "./types";
-import {
   createExtensionMcpServer,
   getExtensionToolNames,
 } from "../mcp/ExtensionMcpServer";
+import {
+  AgentOutput,
+  AgentStatus,
+  ChatMessage,
+  McpServerConfig,
+  SDKMessage,
+} from "./types";
 
 // Import Options type from SDK (will be used in sendPrompt)
 type SettingSource = "user" | "project" | "local";
@@ -35,14 +35,13 @@ export interface AgentConfig {
   mcpServers?: Record<string, McpServerConfig>;
   initialStatus?: AgentStatus;
   outputChannel?: { appendLine: (value: string) => void };
-  pathToClaudeCodeExecutable?: string;
 }
 
 /**
- * AgentSession wraps the Claude Agent SDK for individual agent instances.
+ * AgentSession wraps the configured agent runtime for individual agent instances.
  *
  * Key responsibilities:
- * - Wraps @anthropic-ai/claude-agent-sdk query() function
+ * - Wraps runtime query() function
  * - Maintains conversation history (_messages)
  * - Tracks session ID, cost, and status
  * - Supports pause/resume with pending prompt queue
@@ -164,7 +163,6 @@ export class AgentSession extends EventEmitter {
       permissionMode: "acceptEdits", // Auto-accept file edits
       systemPrompt: this.buildSystemPrompt(),
       abortController: this._abortController,
-      pathToClaudeCodeExecutable: this.config.pathToClaudeCodeExecutable,
       stderr: (data: string) => {
         const line = `[${this.config.name} stderr] ${data}`;
         if (this.config.outputChannel) {
@@ -176,7 +174,7 @@ export class AgentSession extends EventEmitter {
 
     try {
       // Use dynamic import for ES module
-      const { query } = await import("@anthropic-ai/claude-agent-sdk");
+      const { query } = await import("../runtime/OpenAIRuntime.js");
 
       const result = query({
         prompt,
@@ -193,7 +191,8 @@ export class AgentSession extends EventEmitter {
       this._status = "idle";
       this.emit("statusChanged", this._status);
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
       console.error(`[${this.config.name}] Agent error: ${errorMessage}`);
 
       if ((error as Error).name === "AbortError") {
@@ -225,9 +224,15 @@ export class AgentSession extends EventEmitter {
       // Send as a prompt
       await this.sendPrompt(`[SYSTEM NOTIFICATION]\n${message}`);
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      console.error(`[${this.config.name}] Failed to inject notification: ${errorMessage}`);
-      this.emit("error", error instanceof Error ? error : new Error(errorMessage));
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
+      console.error(
+        `[${this.config.name}] Failed to inject notification: ${errorMessage}`,
+      );
+      this.emit(
+        "error",
+        error instanceof Error ? error : new Error(errorMessage),
+      );
     }
   }
 
@@ -353,7 +358,9 @@ IMPORTANT: When you complete your task:
     if (message.type !== "assistant" && message.type !== "result") {
       // Log ignored message types for debugging
       if (this.config.outputChannel && message.type) {
-        this.config.outputChannel.appendLine(`[${this.config.name}] Ignoring message type: ${message.type}`);
+        this.config.outputChannel.appendLine(
+          `[${this.config.name}] Ignoring message type: ${message.type}`,
+        );
       }
       return null;
     }
@@ -366,7 +373,9 @@ IMPORTANT: When you complete your task:
           // Add null safety checks
           if (!sdkMessage.message?.content) {
             if (this.config.outputChannel) {
-              this.config.outputChannel.appendLine(`[${this.config.name}] Warning: Assistant message has no content`);
+              this.config.outputChannel.appendLine(
+                `[${this.config.name}] Warning: Assistant message has no content`,
+              );
             }
             return null;
           }
@@ -376,7 +385,9 @@ IMPORTANT: When you complete your task:
             if (block.type === "text") {
               if (!block.text) {
                 if (this.config.outputChannel) {
-                  this.config.outputChannel.appendLine(`[${this.config.name}] Warning: Text block is empty`);
+                  this.config.outputChannel.appendLine(
+                    `[${this.config.name}] Warning: Text block is empty`,
+                  );
                 }
                 continue;
               }
@@ -395,7 +406,9 @@ IMPORTANT: When you complete your task:
             if (block.type === "tool_use") {
               if (!block.id || !block.name) {
                 if (this.config.outputChannel) {
-                  this.config.outputChannel.appendLine(`[${this.config.name}] Warning: Tool use block missing id or name`);
+                  this.config.outputChannel.appendLine(
+                    `[${this.config.name}] Warning: Tool use block missing id or name`,
+                  );
                 }
                 continue;
               }
@@ -436,9 +449,12 @@ IMPORTANT: When you complete your task:
           };
       }
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
       if (this.config.outputChannel) {
-        this.config.outputChannel.appendLine(`[${this.config.name}] Error processing message: ${errorMessage}`);
+        this.config.outputChannel.appendLine(
+          `[${this.config.name}] Error processing message: ${errorMessage}`,
+        );
       }
       console.error(`[${this.config.name}] Error processing message:`, error);
     }

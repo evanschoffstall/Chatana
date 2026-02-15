@@ -1,17 +1,17 @@
 import * as vscode from "vscode";
-import { OrchestratorAgent } from "./coordinator/OrchestratorAgent";
 import { AgentPool } from "./coordinator/AgentPool";
+import { OrchestratorAgent } from "./coordinator/OrchestratorAgent";
 import { WebviewProvider } from "./providers/WebviewProvider";
 // AgentTreeProvider removed - agents are now shown in the AgentBar
 import { ClaimsTreeProvider } from "./providers/ClaimsTreeProvider";
-import { MessagesTreeProvider } from "./providers/MessagesTreeProvider";
 import { DecoratorProvider } from "./providers/DecoratorProvider";
+import { MessagesTreeProvider } from "./providers/MessagesTreeProvider";
 import { StatusBarProvider } from "./providers/StatusBarProvider";
 // AgentEditorProvider disabled - see TODO comment below
 // import { AgentEditorProvider, AgentDocumentProvider } from "./providers/AgentEditorProvider";
+import { getConfigManager } from "./chatana/ConfigManager";
 import { registerCommands } from "./commands";
 import { registerSlashCommands } from "./commands/DynamicSlashCommands";
-import { getConfigManager } from "./chatana/ConfigManager";
 import { VIEWS } from "./constants";
 
 let orchestrator: OrchestratorAgent | undefined;
@@ -26,7 +26,7 @@ export async function activate(context: vscode.ExtensionContext) {
   // Initialize config manager with workspace root first (needed by many components)
   const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
   if (workspaceRoot) {
-    const { initConfigManager } = await import("./chatana/ConfigManager");
+    const { initConfigManager } = await import("./chatana/ConfigManager.js");
     initConfigManager(workspaceRoot);
   } else {
     console.warn("No workspace folder open - some features may be unavailable");
@@ -39,44 +39,68 @@ export async function activate(context: vscode.ExtensionContext) {
   orchestrator = new OrchestratorAgent(context, agentPool);
 
   // Listen to message arrival events and notify orchestrator or sub-agents
-  const { globalMessageStore } = await import("./mcp/MailMcpServer");
-  globalMessageStore.on("messageArrived", (data: { recipient: string; sender: string; subject: string; messageId: string }) => {
-    // Show notification to user about new message
-    const message = `Agent ${data.recipient} has a message waiting from ${data.sender}: "${data.subject}"`;
-    vscode.window.showInformationMessage(message, "View Messages").then(selection => {
-      if (selection === "View Messages") {
-        vscode.commands.executeCommand("chatana.messages.focus");
-      }
-    });
+  const { globalMessageStore } = await import("./mcp/MailMcpServer.js");
+  globalMessageStore.on(
+    "messageArrived",
+    (data: {
+      recipient: string;
+      sender: string;
+      subject: string;
+      messageId: string;
+    }) => {
+      // Show notification to user about new message
+      const message = `Agent ${data.recipient} has a message waiting from ${data.sender}: "${data.subject}"`;
+      vscode.window
+        .showInformationMessage(message, "View Messages")
+        .then((selection) => {
+          if (selection === "View Messages") {
+            vscode.commands.executeCommand("chatana.messages.focus");
+          }
+        });
 
-    // If the message is for the orchestrator, inject a notification to prompt it to check inbox
-    if (data.recipient === "orchestrator" && orchestrator) {
-      const inboxPrompt = `You have a new message from ${data.sender} with subject: "${data.subject}". Please check your inbox using the inbox() tool and process the message.`;
-      orchestrator.handleUserTask(inboxPrompt).catch(err => {
-        console.error("Failed to notify orchestrator about new message:", err);
-      });
-    }
-    // If the message is for a sub-agent, inject a notification to that agent
-    else if (data.recipient !== "orchestrator" && data.recipient !== "human" && agentPool) {
-      const agent = agentPool.getAgent(data.recipient);
-      // Only notify agents that have an active Claude session:
-      // - "waiting" = placeholder waiting for dependencies, no session yet
-      // - "complete" = finished working, shouldn't be reactivated
-      // - "error" = broken state, notification would likely fail
-      // Note: "paused" agents will queue the notification for when resumed
-      const canNotify = agent && !["waiting", "complete", "error"].includes(agent.status);
-      if (canNotify) {
-        const inboxPrompt = `You have a new message from ${data.sender} with subject: "${data.subject}". Please check your inbox using inbox() and read the message with read_message("${data.messageId}").`;
-        agent.injectNotification(inboxPrompt).catch(err => {
-          console.error(`Failed to notify agent ${data.recipient} about new message:`, err);
+      // If the message is for the orchestrator, inject a notification to prompt it to check inbox
+      if (data.recipient === "orchestrator" && orchestrator) {
+        const inboxPrompt = `You have a new message from ${data.sender} with subject: "${data.subject}". Please check your inbox using the inbox() tool and process the message.`;
+        orchestrator.handleUserTask(inboxPrompt).catch((err) => {
+          console.error(
+            "Failed to notify orchestrator about new message:",
+            err,
+          );
         });
       }
-    }
-  });
+      // If the message is for a sub-agent, inject a notification to that agent
+      else if (
+        data.recipient !== "orchestrator" &&
+        data.recipient !== "human" &&
+        agentPool
+      ) {
+        const agent = agentPool.getAgent(data.recipient);
+        // Only notify agents that have an active LLM session:
+        // - "waiting" = placeholder waiting for dependencies, no session yet
+        // - "complete" = finished working, shouldn't be reactivated
+        // - "error" = broken state, notification would likely fail
+        // Note: "paused" agents will queue the notification for when resumed
+        const canNotify =
+          agent && !["waiting", "complete", "error"].includes(agent.status);
+        if (canNotify) {
+          const inboxPrompt = `You have a new message from ${data.sender} with subject: "${data.subject}". Please check your inbox using inbox() and read the message with read_message("${data.messageId}").`;
+          agent.injectNotification(inboxPrompt).catch((err) => {
+            console.error(
+              `Failed to notify agent ${data.recipient} about new message:`,
+              err,
+            );
+          });
+        }
+      }
+    },
+  );
 
   // Check inbox on startup for any pending unread messages (fire-and-forget)
-  checkInboxOnStartup(globalMessageStore).catch(err => {
-    console.log("Failed to check inbox on startup:", err instanceof Error ? err.message : String(err));
+  checkInboxOnStartup(globalMessageStore).catch((err) => {
+    console.log(
+      "Failed to check inbox on startup:",
+      err instanceof Error ? err.message : String(err),
+    );
   });
 
   // Initialize UI providers
@@ -89,26 +113,26 @@ export async function activate(context: vscode.ExtensionContext) {
 
   // Register webview
   context.subscriptions.push(
-    vscode.window.registerWebviewViewProvider(
-      VIEWS.PANEL,
-      webviewProvider
-    )
+    vscode.window.registerWebviewViewProvider(VIEWS.PANEL, webviewProvider),
   );
 
   // Register tree views (Claims and Messages only - Agents are shown in AgentBar)
   context.subscriptions.push(
-    vscode.window.registerTreeDataProvider(
-      VIEWS.CLAIMS,
-      claimsTreeProvider
-    ),
+    vscode.window.registerTreeDataProvider(VIEWS.CLAIMS, claimsTreeProvider),
     vscode.window.registerTreeDataProvider(
       VIEWS.MESSAGES,
-      messagesTreeProvider
-    )
+      messagesTreeProvider,
+    ),
   );
 
   // Register commands
-  registerCommands(context, orchestrator, agentPool, webviewProvider, messagesTreeProvider);
+  registerCommands(
+    context,
+    orchestrator,
+    agentPool,
+    webviewProvider,
+    messagesTreeProvider,
+  );
 
   // Register slash commands (workflow-aware command completion and status bar)
   if (workspaceRoot) {
@@ -180,22 +204,30 @@ async function checkInboxOnStartup(messageStore: any): Promise<void> {
     await messageStore.initialize();
 
     const allMessages = await messageStore.getAllMessages();
-    const unreadMessages = allMessages.filter((m: any) => !m.read && !m.archived);
+    const unreadMessages = allMessages.filter(
+      (m: any) => !m.read && !m.archived,
+    );
 
     if (unreadMessages.length > 0) {
-      const message = unreadMessages.length === 1
-        ? `You have 1 unread message in your inbox`
-        : `You have ${unreadMessages.length} unread messages in your inbox`;
+      const message =
+        unreadMessages.length === 1
+          ? `You have 1 unread message in your inbox`
+          : `You have ${unreadMessages.length} unread messages in your inbox`;
 
-      vscode.window.showInformationMessage(message, "View Messages").then(selection => {
-        if (selection === "View Messages") {
-          vscode.commands.executeCommand("chatana.messages.focus");
-        }
-      });
+      vscode.window
+        .showInformationMessage(message, "View Messages")
+        .then((selection) => {
+          if (selection === "View Messages") {
+            vscode.commands.executeCommand("chatana.messages.focus");
+          }
+        });
     }
   } catch (error) {
     // Silently ignore errors during startup inbox check
     // (e.g., if .chatana folder doesn't exist yet)
-    console.log("Inbox check skipped:", error instanceof Error ? error.message : String(error));
+    console.log(
+      "Inbox check skipped:",
+      error instanceof Error ? error.message : String(error),
+    );
   }
 }

@@ -1,13 +1,18 @@
-import * as vscode from "vscode";
 import { EventEmitter } from "events";
+import * as vscode from "vscode";
+import { generateUniqueAgentName } from "../utils/agentNaming";
 import { AgentPool } from "./AgentPool";
 import { OrchestratorMessage } from "./types";
-import { generateUniqueAgentName } from "../utils/agentNaming";
 
 // Define local types for SDK (will use dynamic import for the actual SDK functions)
 type SettingSource = "user" | "project" | "local";
 
-type PermissionMode = 'default' | 'acceptEdits' | 'bypassPermissions' | 'plan' | 'dontAsk';
+type PermissionMode =
+  | "default"
+  | "acceptEdits"
+  | "bypassPermissions"
+  | "plan"
+  | "dontAsk";
 
 type Options = {
   abortController?: AbortController;
@@ -30,11 +35,11 @@ type Query = AsyncGenerator<SDKMessage, void>;
  */
 function getModelId(tier: string): string {
   const modelMap: Record<string, string> = {
-    'opus': 'claude-opus-4-20250514',
-    'sonnet': 'claude-sonnet-4-20250514',
-    'haiku': 'claude-haiku-3-20250514',
+    "gpt-5": "gpt-5",
+    "gpt-4.1": "gpt-4.1",
+    "gpt-4.1-mini": "gpt-4.1-mini",
   };
-  return modelMap[tier] || modelMap['sonnet'];
+  return modelMap[tier] || modelMap["gpt-4.1"];
 }
 
 /**
@@ -174,7 +179,7 @@ DO analyze dependencies to avoid wasted work or conflicts.
 
 ## CRITICAL: USE ONLY MCP TOOLS
 
-You MUST use the MCP tools provided (mcp__orchestrator-tools__*), NOT built-in Claude Code tools.
+You MUST use the MCP tools provided (mcp__orchestrator-tools__*), NOT built-in assistant tools.
 - Use spawn_agent (NOT Task tool) to create agents
 - Use create_workitem (NOT TodoWrite) to create User Stories
 - Use memory_save_fact (NOT any other memory tool) to save learnings
@@ -378,21 +383,26 @@ export class OrchestratorAgent extends EventEmitter {
   private _isProcessingQueue = false;
   private workItemWatcherInitialized = false;
   private _contextTokens = 0;
-  private _maxContextTokens = 200000; // Sonnet 4 context window
+  private _maxContextTokens = 128000; // Conservative default context window
 
   constructor(
     _context: vscode.ExtensionContext,
-    private readonly agentPool: AgentPool
+    private readonly agentPool: AgentPool,
   ) {
     super();
-    this.outputChannel = vscode.window.createOutputChannel("Multi-Agent Orchestrator");
+    this.outputChannel = vscode.window.createOutputChannel(
+      "Multi-Agent Orchestrator",
+    );
   }
 
   /**
    * Get current context usage (0-100%)
    */
   get contextUsage(): number {
-    return Math.min(100, Math.round((this._contextTokens / this._maxContextTokens) * 100));
+    return Math.min(
+      100,
+      Math.round((this._contextTokens / this._maxContextTokens) * 100),
+    );
   }
 
   /**
@@ -441,7 +451,9 @@ export class OrchestratorAgent extends EventEmitter {
 
     // If already processing, the queued message will be picked up
     if (this._isProcessingQueue) {
-      vscode.window.showInformationMessage(`Message queued (${this._messageQueue.length} pending)`);
+      vscode.window.showInformationMessage(
+        `Message queued (${this._messageQueue.length} pending)`,
+      );
       return;
     }
 
@@ -468,7 +480,9 @@ export class OrchestratorAgent extends EventEmitter {
    * Process a single task (internal implementation)
    */
   private async processTask(task: string): Promise<void> {
-    this.outputChannel.appendLine(`[DEBUG] processTask starting: "${task.substring(0, 50)}..."`);
+    this.outputChannel.appendLine(
+      `[DEBUG] processTask starting: "${task.substring(0, 50)}..."`,
+    );
     this.outputChannel.show(); // Force show the output channel
 
     this.isProcessing = true;
@@ -476,21 +490,25 @@ export class OrchestratorAgent extends EventEmitter {
 
     // Initialize work item watcher on first task
     if (!this.workItemWatcherInitialized) {
-      this.outputChannel.appendLine("[DEBUG] About to init work item watcher...");
+      this.outputChannel.appendLine(
+        "[DEBUG] About to init work item watcher...",
+      );
       await this.initWorkItemWatcher();
       this.workItemWatcherInitialized = true;
       this.outputChannel.appendLine("[DEBUG] Work item watcher init complete");
     }
 
     const config = vscode.workspace.getConfiguration("chatana");
-    const modelTier = config.get<string>("coordinatorModel") ?? "sonnet";
+    const modelTier = config.get<string>("coordinatorModel") ?? "gpt-4.1";
     const model = getModelId(modelTier);
 
     try {
       // Dynamic import for ES module SDK
-      const { query, createSdkMcpServer } = await import("@anthropic-ai/claude-agent-sdk");
-      const { createMemoryMcpTools } = await import("../mcp/MemoryMcpServer");
-      const { createMailMcpTools } = await import("../mcp/MailMcpServer");
+      const { query, createSdkMcpServer } =
+        await import("../runtime/OpenAIRuntime.js");
+      const { createMemoryMcpTools } =
+        await import("../mcp/MemoryMcpServer.js");
+      const { createMailMcpTools } = await import("../mcp/MailMcpServer.js");
 
       // Get orchestrator tools, memory tools, and mail tools
       const orchestratorTools = await this.getOrchestratorMcpTools();
@@ -510,47 +528,53 @@ export class OrchestratorAgent extends EventEmitter {
         ...this.getMcpServers(),
       };
 
-      this.outputChannel.appendLine(`Starting orchestrator with model: ${model}`);
-      this.outputChannel.appendLine(`Working directory: ${this.getWorkingDirectory()}`);
-      this.outputChannel.appendLine(`Queue depth: ${this._messageQueue.length}`);
+      this.outputChannel.appendLine(
+        `Starting orchestrator with model: ${model}`,
+      );
+      this.outputChannel.appendLine(
+        `Working directory: ${this.getWorkingDirectory()}`,
+      );
+      this.outputChannel.appendLine(
+        `Queue depth: ${this._messageQueue.length}`,
+      );
 
       // Allow all orchestrator MCP tools without permission prompts
       const allowedTools = [
         // Agent management
-        'mcp__orchestrator-tools__spawn_agent',
-        'mcp__orchestrator-tools__destroy_agent',
-        'mcp__orchestrator-tools__message_agent',
-        'mcp__orchestrator-tools__get_agent_status',
-        'mcp__orchestrator-tools__report_to_user',
+        "mcp__orchestrator-tools__spawn_agent",
+        "mcp__orchestrator-tools__destroy_agent",
+        "mcp__orchestrator-tools__message_agent",
+        "mcp__orchestrator-tools__get_agent_status",
+        "mcp__orchestrator-tools__report_to_user",
         // User Stories (Kanban)
-        'mcp__orchestrator-tools__create_workitem',
-        'mcp__orchestrator-tools__list_workitems',
-        'mcp__orchestrator-tools__assign_workitem',
-        'mcp__orchestrator-tools__move_workitem',
+        "mcp__orchestrator-tools__create_workitem",
+        "mcp__orchestrator-tools__list_workitems",
+        "mcp__orchestrator-tools__assign_workitem",
+        "mcp__orchestrator-tools__move_workitem",
         // Team Manager proactive tools
-        'mcp__orchestrator-tools__get_unassigned_todo_items',
-        'mcp__orchestrator-tools__spawn_agents_for_items',
-        'mcp__orchestrator-tools__get_team_status',
-        'mcp__orchestrator-tools__validate_agent_assignments',
+        "mcp__orchestrator-tools__get_unassigned_todo_items",
+        "mcp__orchestrator-tools__spawn_agents_for_items",
+        "mcp__orchestrator-tools__get_team_status",
+        "mcp__orchestrator-tools__validate_agent_assignments",
         // Memory & Learning
-        'mcp__orchestrator-tools__memory_search_playbooks',
-        'mcp__orchestrator-tools__memory_get_playbook',
-        'mcp__orchestrator-tools__memory_save_playbook',
-        'mcp__orchestrator-tools__memory_search_facts',
-        'mcp__orchestrator-tools__memory_save_fact',
-        'mcp__orchestrator-tools__memory_search_sessions',
-        'mcp__orchestrator-tools__memory_get_recent_sessions',
-        'mcp__orchestrator-tools__memory_record_lesson',
+        "mcp__orchestrator-tools__memory_search_playbooks",
+        "mcp__orchestrator-tools__memory_get_playbook",
+        "mcp__orchestrator-tools__memory_save_playbook",
+        "mcp__orchestrator-tools__memory_search_facts",
+        "mcp__orchestrator-tools__memory_save_fact",
+        "mcp__orchestrator-tools__memory_search_sessions",
+        "mcp__orchestrator-tools__memory_get_recent_sessions",
+        "mcp__orchestrator-tools__memory_record_lesson",
         // Mail tools
-        'mcp__orchestrator-tools__inbox',
-        'mcp__orchestrator-tools__read_message',
-        'mcp__orchestrator-tools__mark_message_read',
-        'mcp__orchestrator-tools__send_message',
-        'mcp__orchestrator-tools__sent_messages',
-        'mcp__orchestrator-tools__delete_message',
-        'mcp__orchestrator-tools__reply_to_message',
-        'mcp__orchestrator-tools__archive_message',
-        'mcp__orchestrator-tools__archived_messages',
+        "mcp__orchestrator-tools__inbox",
+        "mcp__orchestrator-tools__read_message",
+        "mcp__orchestrator-tools__mark_message_read",
+        "mcp__orchestrator-tools__send_message",
+        "mcp__orchestrator-tools__sent_messages",
+        "mcp__orchestrator-tools__delete_message",
+        "mcp__orchestrator-tools__reply_to_message",
+        "mcp__orchestrator-tools__archive_message",
+        "mcp__orchestrator-tools__archived_messages",
       ];
 
       const options: Options = {
@@ -558,17 +582,17 @@ export class OrchestratorAgent extends EventEmitter {
         cwd: this.getWorkingDirectory(),
         systemPrompt: ORCHESTRATOR_SYSTEM_PROMPT.replace(
           "{workingDirectory}",
-          this.getWorkingDirectory()
+          this.getWorkingDirectory(),
         ),
         mcpServers,
         allowedTools,
-        permissionMode: 'acceptEdits',
-        abortController: this._abortController = new AbortController(),
-        settingSources: ['user'],
+        permissionMode: "acceptEdits",
+        abortController: (this._abortController = new AbortController()),
+        settingSources: ["user"],
         // Resume the session if we have one (enables multi-turn conversation)
         ...(this._sessionId && { resume: this._sessionId }),
         stderr: (data: string) => {
-          this.outputChannel.appendLine(`[Claude Code stderr] ${data}`);
+          this.outputChannel.appendLine(`[LLM runtime stderr] ${data}`);
         },
       };
 
@@ -586,7 +610,10 @@ export class OrchestratorAgent extends EventEmitter {
 
       // If there are more messages in the queue, show "processing" status
       if (this._messageQueue.length > 0) {
-        this.emit("statusChanged", `processing (${this._messageQueue.length} queued)`);
+        this.emit(
+          "statusChanged",
+          `processing (${this._messageQueue.length} queued)`,
+        );
       } else {
         this.emit("statusChanged", "idle");
       }
@@ -594,7 +621,8 @@ export class OrchestratorAgent extends EventEmitter {
       this.isProcessing = false;
       this.emit("statusChanged", "error");
 
-      const errorMessage = error instanceof Error ? error.message : String(error);
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
       const errorStack = error instanceof Error ? error.stack : undefined;
 
       this.outputChannel.appendLine(`\n=== ORCHESTRATOR ERROR ===`);
@@ -618,7 +646,7 @@ export class OrchestratorAgent extends EventEmitter {
   }
 
   /**
-   * Process a message from the Claude Agent SDK
+   * Process a message from the agent runtime SDK
    */
   private async processOrchestratorMessage(message: SDKMessage): Promise<void> {
     try {
@@ -626,7 +654,9 @@ export class OrchestratorAgent extends EventEmitter {
       if (message.type === "assistant") {
         // Add null safety check
         if (!message.message?.content) {
-          this.outputChannel.appendLine("Warning: Assistant message has no content");
+          this.outputChannel.appendLine(
+            "Warning: Assistant message has no content",
+          );
           return;
         }
 
@@ -650,7 +680,7 @@ export class OrchestratorAgent extends EventEmitter {
           if (block.type === "tool_use") {
             // Tool calls are handled by MCP server, but we can log them
             this.outputChannel.appendLine(
-              `Tool call: ${block.name ?? 'unknown'} ${JSON.stringify(block.input ?? {})}`
+              `Tool call: ${block.name ?? "unknown"} ${JSON.stringify(block.input ?? {})}`,
             );
           }
         }
@@ -661,12 +691,14 @@ export class OrchestratorAgent extends EventEmitter {
         this._sessionId = message.session_id;
       }
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      this.outputChannel.appendLine(`Error processing orchestrator message: ${errorMessage}`);
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
+      this.outputChannel.appendLine(
+        `Error processing orchestrator message: ${errorMessage}`,
+      );
       this.emit("error", error);
     }
   }
-
 
   /**
    * Get the MCP tools available to the orchestrator
@@ -674,20 +706,46 @@ export class OrchestratorAgent extends EventEmitter {
   private async getOrchestratorMcpTools(): Promise<any[]> {
     // Import zod for schema definition
     const { z } = await import("zod");
-    const { tool } = await import("@anthropic-ai/claude-agent-sdk");
+    const { tool } = await import("../runtime/OpenAIRuntime.js");
 
     return [
       tool(
         "spawn_agent",
         "Create a new specialist agent to work on a specific part of the task. Agent names are automatically made unique using format <descriptive>-<random> (e.g., 'reviewer-guacamole'). Optionally assign a User Story. Includes automatic verification and rollback on failure.",
         {
-          name: z.string().describe("Descriptive name for this agent (e.g., 'reviewer', 'developer', 'architect'). Will be made unique automatically."),
-          role: z.string().describe("What this agent specializes in (e.g., 'Core Parser Engineer')"),
-          focus: z.string().describe("Specific task this agent should accomplish"),
-          systemPrompt: z.string().optional().describe("Detailed instructions for the agent (optional)"),
-          waitFor: z.array(z.string()).optional().describe("Names of agents this one should wait for before starting"),
-          priority: z.number().optional().describe("Execution priority (lower = start sooner)"),
-          workItemId: z.string().optional().describe("User Story ID to assign to this agent (auto-assigns and moves to 'doing')"),
+          name: z
+            .string()
+            .describe(
+              "Descriptive name for this agent (e.g., 'reviewer', 'developer', 'architect'). Will be made unique automatically.",
+            ),
+          role: z
+            .string()
+            .describe(
+              "What this agent specializes in (e.g., 'Core Parser Engineer')",
+            ),
+          focus: z
+            .string()
+            .describe("Specific task this agent should accomplish"),
+          systemPrompt: z
+            .string()
+            .optional()
+            .describe("Detailed instructions for the agent (optional)"),
+          waitFor: z
+            .array(z.string())
+            .optional()
+            .describe(
+              "Names of agents this one should wait for before starting",
+            ),
+          priority: z
+            .number()
+            .optional()
+            .describe("Execution priority (lower = start sooner)"),
+          workItemId: z
+            .string()
+            .optional()
+            .describe(
+              "User Story ID to assign to this agent (auto-assigns and moves to 'doing')",
+            ),
         },
         async (args) => {
           let workItemAssigned = false;
@@ -697,27 +755,36 @@ export class OrchestratorAgent extends EventEmitter {
             // Generate unique agent name
             const agentStatus = this.agentPool.getStatus();
             const existingNames = new Set([
-              ...agentStatus.activeAgents.map(a => a.name),
+              ...agentStatus.activeAgents.map((a) => a.name),
               ...agentStatus.pendingAgents,
             ]);
-            const uniqueName = generateUniqueAgentName(args.name, existingNames);
+            const uniqueName = generateUniqueAgentName(
+              args.name,
+              existingNames,
+            );
 
             // Log if name was changed
             if (uniqueName !== args.name) {
-              this.outputChannel.appendLine(`Generated unique name: ${uniqueName} (from ${args.name})`);
+              this.outputChannel.appendLine(
+                `Generated unique name: ${uniqueName} (from ${args.name})`,
+              );
             }
             // If workItemId provided, assign and move to doing
             if (args.workItemId) {
               const { getWorkItemManager } = await import("../kanban");
               const workItemManager = getWorkItemManager();
 
-              await workItemManager.updateItem(args.workItemId, { assignee: uniqueName });
+              await workItemManager.updateItem(args.workItemId, {
+                assignee: uniqueName,
+              });
               workItemAssigned = true;
 
-              await workItemManager.moveItem(args.workItemId, 'doing');
+              await workItemManager.moveItem(args.workItemId, "doing");
               workItemMoved = true;
 
-              this.outputChannel.appendLine(`Assigned User Story ${args.workItemId} to ${uniqueName} and moved to doing`);
+              this.outputChannel.appendLine(
+                `Assigned User Story ${args.workItemId} to ${uniqueName} and moved to doing`,
+              );
             }
 
             // Spawn the agent with the unique name
@@ -725,7 +792,9 @@ export class OrchestratorAgent extends EventEmitter {
               name: uniqueName,
               role: args.role,
               focus: args.focus,
-              systemPrompt: args.systemPrompt ?? `You are a ${args.role}. Your focus: ${args.focus}`,
+              systemPrompt:
+                args.systemPrompt ??
+                `You are a ${args.role}. Your focus: ${args.focus}`,
               waitFor: args.waitFor ?? [],
               priority: args.priority ?? 0,
               workingDirectory: this.getWorkingDirectory(),
@@ -734,64 +803,104 @@ export class OrchestratorAgent extends EventEmitter {
 
             // Verify agent was created
             const updatedAgentStatus = this.agentPool.getStatus();
-            const agentExists = updatedAgentStatus.activeAgents.some((a: any) => a.name === uniqueName) ||
-                               updatedAgentStatus.pendingAgents.some((a: any) => a.name === uniqueName);
+            const agentExists =
+              updatedAgentStatus.activeAgents.some(
+                (a: any) => a.name === uniqueName,
+              ) ||
+              updatedAgentStatus.pendingAgents.some(
+                (a: any) => a.name === uniqueName,
+              );
 
             if (!agentExists) {
-              throw new Error(`Agent ${uniqueName} was not found in agent pool after spawning`);
+              throw new Error(
+                `Agent ${uniqueName} was not found in agent pool after spawning`,
+              );
             }
 
             this.emit("agentSpawned", uniqueName);
-            const storyInfo = args.workItemId ? ` (assigned to ${args.workItemId})` : '';
-            vscode.window.showInformationMessage(`Spawned agent: ${uniqueName} (${args.role})${storyInfo}`);
+            const storyInfo = args.workItemId
+              ? ` (assigned to ${args.workItemId})`
+              : "";
+            vscode.window.showInformationMessage(
+              `Spawned agent: ${uniqueName} (${args.role})${storyInfo}`,
+            );
 
             return {
-              content: [{ type: "text", text: `Successfully spawned agent: ${uniqueName}${storyInfo}` }],
+              content: [
+                {
+                  type: "text",
+                  text: `Successfully spawned agent: ${uniqueName}${storyInfo}`,
+                },
+              ],
             };
           } catch (error) {
-            const errorMsg = error instanceof Error ? error.message : String(error);
+            const errorMsg =
+              error instanceof Error ? error.message : String(error);
 
             // Rollback work item assignment if agent creation failed
             if (args.workItemId && (workItemAssigned || workItemMoved)) {
               try {
                 const { getWorkItemManager } = await import("../kanban");
                 const workItemManager = getWorkItemManager();
-                await workItemManager.moveItem(args.workItemId, 'todo');
-                await workItemManager.updateItem(args.workItemId, { assignee: undefined });
-                this.outputChannel.appendLine(`Rolled back work item ${args.workItemId} to todo (agent spawn failed)`);
+                await workItemManager.moveItem(args.workItemId, "todo");
+                await workItemManager.updateItem(args.workItemId, {
+                  assignee: undefined,
+                });
+                this.outputChannel.appendLine(
+                  `Rolled back work item ${args.workItemId} to todo (agent spawn failed)`,
+                );
               } catch (rollbackError) {
-                const rollbackMsg = rollbackError instanceof Error ? rollbackError.message : String(rollbackError);
-                this.outputChannel.appendLine(`Failed to rollback ${args.workItemId}: ${rollbackMsg}`);
+                const rollbackMsg =
+                  rollbackError instanceof Error
+                    ? rollbackError.message
+                    : String(rollbackError);
+                this.outputChannel.appendLine(
+                  `Failed to rollback ${args.workItemId}: ${rollbackMsg}`,
+                );
               }
             }
 
             // Re-throw the error with the unique name we attempted to use
             const agentStatus = this.agentPool.getStatus();
             const existingNames = new Set([
-              ...agentStatus.activeAgents.map(a => a.name),
+              ...agentStatus.activeAgents.map((a) => a.name),
               ...agentStatus.pendingAgents,
             ]);
-            const attemptedName = generateUniqueAgentName(args.name, existingNames);
-            throw new Error(`Failed to spawn agent ${attemptedName}: ${errorMsg}`);
+            const attemptedName = generateUniqueAgentName(
+              args.name,
+              existingNames,
+            );
+            throw new Error(
+              `Failed to spawn agent ${attemptedName}: ${errorMsg}`,
+            );
           }
-        }
+        },
       ),
       tool(
         "destroy_agent",
         "Shut down an agent that has completed its work or is no longer needed",
         {
           name: z.string().describe("Agent name to shut down"),
-          reason: z.string().describe("Why (completed, no longer needed, error)"),
+          reason: z
+            .string()
+            .describe("Why (completed, no longer needed, error)"),
         },
         async (args) => {
           await this.agentPool.destroyAgent(args.name);
           this.emit("agentDestroyed", args.name);
-          this.outputChannel.appendLine(`Destroyed ${args.name}: ${args.reason}`);
+          this.outputChannel.appendLine(
+            `Destroyed ${args.name}: ${args.reason}`,
+          );
 
           return {
-            content: [{ type: "text", text: `Successfully destroyed agent: ${args.name}` }],
+            content: [
+              {
+                type: "text",
+                text: `Successfully destroyed agent: ${args.name}`,
+              },
+            ],
           };
-        }
+        },
       ),
       tool(
         "message_agent",
@@ -804,9 +913,11 @@ export class OrchestratorAgent extends EventEmitter {
           await this.agentPool.messageAgent(args.name, args.message);
 
           return {
-            content: [{ type: "text", text: `Message sent to agent: ${args.name}` }],
+            content: [
+              { type: "text", text: `Message sent to agent: ${args.name}` },
+            ],
           };
-        }
+        },
       ),
       tool(
         "get_agent_status",
@@ -814,18 +925,22 @@ export class OrchestratorAgent extends EventEmitter {
         {},
         async () => {
           const status = this.agentPool.getStatus();
-          this.outputChannel.appendLine(`Agent status: ${JSON.stringify(status, null, 2)}`);
+          this.outputChannel.appendLine(
+            `Agent status: ${JSON.stringify(status, null, 2)}`,
+          );
 
           return {
             content: [{ type: "text", text: JSON.stringify(status, null, 2) }],
           };
-        }
+        },
       ),
       tool(
         "report_to_user",
         "Send a progress update or final report to the user",
         {
-          type: z.enum(["progress", "complete", "error", "question"]).describe("Type of report"),
+          type: z
+            .enum(["progress", "complete", "error", "question"])
+            .describe("Type of report"),
           message: z.string().describe("The update message"),
         },
         async (args) => {
@@ -847,23 +962,43 @@ export class OrchestratorAgent extends EventEmitter {
           }
 
           return {
-            content: [{ type: "text", text: `Report sent to user: ${args.message}` }],
+            content: [
+              { type: "text", text: `Report sent to user: ${args.message}` },
+            ],
           };
-        }
+        },
       ),
       tool(
         "create_workitem",
         "Create a new User Story on the Kanban board in the todo column. Link to a Feature using featureRef when implementing ADR/investigation work.",
         {
           title: z.string().describe("Short title for the User Story"),
-          description: z.string().describe("Detailed description of the work to be done"),
-          priority: z.enum(["critical", "high", "medium", "low"]).optional().describe("Priority level (default: medium)"),
-          tags: z.array(z.string()).optional().describe("Tags for categorization"),
-          estimatedHours: z.number().optional().describe("Estimated AGENT HOURS to complete (not human hours). Consider how long an AI agent will take."),
-          featureRef: z.string().optional().describe("Reference to parent feature folder (e.g., 'docs/features/kanban-workitems'). Use when implementing ADR/investigation features."),
+          description: z
+            .string()
+            .describe("Detailed description of the work to be done"),
+          priority: z
+            .enum(["critical", "high", "medium", "low"])
+            .optional()
+            .describe("Priority level (default: medium)"),
+          tags: z
+            .array(z.string())
+            .optional()
+            .describe("Tags for categorization"),
+          estimatedHours: z
+            .number()
+            .optional()
+            .describe(
+              "Estimated AGENT HOURS to complete (not human hours). Consider how long an AI agent will take.",
+            ),
+          featureRef: z
+            .string()
+            .optional()
+            .describe(
+              "Reference to parent feature folder (e.g., 'docs/features/kanban-workitems'). Use when implementing ADR/investigation features.",
+            ),
         },
         async (args) => {
-          const { getWorkItemManager } = await import("../kanban");
+          const { getWorkItemManager } = await import("../kanban/index.js");
           const workItemManager = getWorkItemManager();
 
           const item = await workItemManager.createItem({
@@ -875,19 +1010,31 @@ export class OrchestratorAgent extends EventEmitter {
             featureRef: args.featureRef,
           });
 
-          const featureInfo = item.featureRef ? ` (Feature: ${item.featureRef})` : '';
-          this.outputChannel.appendLine(`Created User Story: ${item.id} - ${item.title}${featureInfo}`);
+          const featureInfo = item.featureRef
+            ? ` (Feature: ${item.featureRef})`
+            : "";
+          this.outputChannel.appendLine(
+            `Created User Story: ${item.id} - ${item.title}${featureInfo}`,
+          );
 
           return {
-            content: [{ type: "text", text: `Created User Story ${item.id}: ${item.title}${featureInfo}` }],
+            content: [
+              {
+                type: "text",
+                text: `Created User Story ${item.id}: ${item.title}${featureInfo}`,
+              },
+            ],
           };
-        }
+        },
       ),
       tool(
         "list_workitems",
         "List all User Stories on the Kanban board",
         {
-          status: z.enum(["todo", "doing", "code-review", "done", "cancelled"]).optional().describe("Filter by status"),
+          status: z
+            .enum(["todo", "doing", "code-review", "done", "cancelled"])
+            .optional()
+            .describe("Filter by status"),
         },
         async (args) => {
           const { getWorkItemManager } = await import("../kanban");
@@ -895,24 +1042,30 @@ export class OrchestratorAgent extends EventEmitter {
 
           const items = await workItemManager.listItems(args.status);
 
-          const summary = items.map((item: any) => {
-            const feature = item.featureRef ? ` [Feature: ${item.featureRef}]` : '';
-            return `[${item.status}] ${item.id}: ${item.title} (Priority: ${item.priority}, Assignee: ${item.assignee || 'unassigned'})${feature}`;
-          }).join('\n');
+          const summary = items
+            .map((item: any) => {
+              const feature = item.featureRef
+                ? ` [Feature: ${item.featureRef}]`
+                : "";
+              return `[${item.status}] ${item.id}: ${item.title} (Priority: ${item.priority}, Assignee: ${item.assignee || "unassigned"})${feature}`;
+            })
+            .join("\n");
 
           this.outputChannel.appendLine(`User Stories:\n${summary}`);
 
           return {
             content: [{ type: "text", text: `User Stories:\n${summary}` }],
           };
-        }
+        },
       ),
       tool(
         "assign_workitem",
         "Assign a User Story to a specific agent",
         {
           itemId: z.string().describe("User Story ID to assign"),
-          agentName: z.string().describe("Name of the agent to assign to this story"),
+          agentName: z
+            .string()
+            .describe("Name of the agent to assign to this story"),
         },
         async (args) => {
           const { getWorkItemManager } = await import("../kanban");
@@ -922,19 +1075,28 @@ export class OrchestratorAgent extends EventEmitter {
             assignee: args.agentName,
           });
 
-          this.outputChannel.appendLine(`Assigned User Story ${args.itemId} to ${args.agentName}`);
+          this.outputChannel.appendLine(
+            `Assigned User Story ${args.itemId} to ${args.agentName}`,
+          );
 
           return {
-            content: [{ type: "text", text: `Assigned User Story ${args.itemId} to ${args.agentName}` }],
+            content: [
+              {
+                type: "text",
+                text: `Assigned User Story ${args.itemId} to ${args.agentName}`,
+              },
+            ],
           };
-        }
+        },
       ),
       tool(
         "move_workitem",
         "Move a User Story to a different column on the Kanban board",
         {
           itemId: z.string().describe("User Story ID to move"),
-          status: z.enum(["todo", "doing", "code-review", "done", "cancelled"]).describe("Target status/column"),
+          status: z
+            .enum(["todo", "doing", "code-review", "done", "cancelled"])
+            .describe("Target status/column"),
         },
         async (args) => {
           const { getWorkItemManager } = await import("../kanban");
@@ -942,12 +1104,19 @@ export class OrchestratorAgent extends EventEmitter {
 
           await workItemManager.moveItem(args.itemId, args.status);
 
-          this.outputChannel.appendLine(`Moved User Story ${args.itemId} to ${args.status}`);
+          this.outputChannel.appendLine(
+            `Moved User Story ${args.itemId} to ${args.status}`,
+          );
 
           return {
-            content: [{ type: "text", text: `Moved User Story ${args.itemId} to ${args.status}` }],
+            content: [
+              {
+                type: "text",
+                text: `Moved User Story ${args.itemId} to ${args.status}`,
+              },
+            ],
           };
-        }
+        },
       ),
       tool(
         "get_unassigned_todo_items",
@@ -957,41 +1126,70 @@ export class OrchestratorAgent extends EventEmitter {
           const { getWorkItemManager } = await import("../kanban");
           const workItemManager = getWorkItemManager();
 
-          const todoItems = await workItemManager.listItems('todo');
+          const todoItems = await workItemManager.listItems("todo");
           const unassigned = todoItems.filter((item: any) => !item.assignee);
 
           if (unassigned.length === 0) {
             return {
-              content: [{ type: "text", text: "No unassigned items in todo column. All work is either assigned or completed." }],
+              content: [
+                {
+                  type: "text",
+                  text: "No unassigned items in todo column. All work is either assigned or completed.",
+                },
+              ],
             };
           }
 
-          const summary = unassigned.map((item: any) => {
-            const feature = item.featureRef ? ` [Feature: ${item.featureRef}]` : '';
-            const estimate = item.estimatedHours ? ` (Est: ${item.estimatedHours}h)` : '';
-            return `- ${item.id}: ${item.title} (Priority: ${item.priority})${estimate}${feature}`;
-          }).join('\n');
+          const summary = unassigned
+            .map((item: any) => {
+              const feature = item.featureRef
+                ? ` [Feature: ${item.featureRef}]`
+                : "";
+              const estimate = item.estimatedHours
+                ? ` (Est: ${item.estimatedHours}h)`
+                : "";
+              return `- ${item.id}: ${item.title} (Priority: ${item.priority})${estimate}${feature}`;
+            })
+            .join("\n");
 
-          this.outputChannel.appendLine(`Found ${unassigned.length} unassigned todo items`);
+          this.outputChannel.appendLine(
+            `Found ${unassigned.length} unassigned todo items`,
+          );
 
           return {
-            content: [{
-              type: "text",
-              text: `Found ${unassigned.length} unassigned item(s) ready for work:\n${summary}\n\nAs Team Manager, spawn agents for these items to maximize parallel work.`
-            }],
+            content: [
+              {
+                type: "text",
+                text: `Found ${unassigned.length} unassigned item(s) ready for work:\n${summary}\n\nAs Team Manager, spawn agents for these items to maximize parallel work.`,
+              },
+            ],
           };
-        }
+        },
       ),
       tool(
         "spawn_agents_for_items",
         "Spawn specialist agents for multiple work items concurrently. Agent names are automatically made unique using format <descriptive>-<random>. This is the preferred way to assign work as a Team Manager - get multiple agents working in parallel.",
         {
-          assignments: z.array(z.object({
-            workItemId: z.string().describe("The User Story ID"),
-            agentName: z.string().describe("Descriptive name for the agent (e.g., 'developer', 'tester'). Will be made unique automatically."),
-            role: z.string().describe("Agent's role (e.g., 'Backend Engineer', 'Frontend Engineer')"),
-            focus: z.string().describe("Specific focus/task for this agent"),
-          })).describe("List of work item to agent assignments"),
+          assignments: z
+            .array(
+              z.object({
+                workItemId: z.string().describe("The User Story ID"),
+                agentName: z
+                  .string()
+                  .describe(
+                    "Descriptive name for the agent (e.g., 'developer', 'tester'). Will be made unique automatically.",
+                  ),
+                role: z
+                  .string()
+                  .describe(
+                    "Agent's role (e.g., 'Backend Engineer', 'Frontend Engineer')",
+                  ),
+                focus: z
+                  .string()
+                  .describe("Specific focus/task for this agent"),
+              }),
+            )
+            .describe("List of work item to agent assignments"),
         },
         async (args) => {
           const { getWorkItemManager } = await import("../kanban");
@@ -999,23 +1197,29 @@ export class OrchestratorAgent extends EventEmitter {
 
           const results: string[] = [];
           const errors: string[] = [];
-          const rollbacks: Array<{ workItemId: string; agentName: string }> = [];
+          const rollbacks: Array<{ workItemId: string; agentName: string }> =
+            [];
 
           // Generate unique names for all agents first
           const agentStatus = this.agentPool.getStatus();
           const existingNames = new Set([
-            ...agentStatus.activeAgents.map(a => a.name),
+            ...agentStatus.activeAgents.map((a) => a.name),
             ...agentStatus.pendingAgents,
           ]);
 
           // Map original names to unique names
           const nameMapping = new Map<string, string>();
           for (const assignment of args.assignments) {
-            const uniqueName = generateUniqueAgentName(assignment.agentName, existingNames);
+            const uniqueName = generateUniqueAgentName(
+              assignment.agentName,
+              existingNames,
+            );
             nameMapping.set(assignment.agentName, uniqueName);
             existingNames.add(uniqueName); // Add to set to avoid duplicates within this batch
             if (uniqueName !== assignment.agentName) {
-              this.outputChannel.appendLine(`Generated unique name: ${uniqueName} (from ${assignment.agentName})`);
+              this.outputChannel.appendLine(
+                `Generated unique name: ${uniqueName} (from ${assignment.agentName})`,
+              );
             }
           }
 
@@ -1027,108 +1231,161 @@ export class OrchestratorAgent extends EventEmitter {
 
           if (availableSlots <= 0) {
             return {
-              content: [{
-                type: "text",
-                text: `Cannot spawn agents: Maximum concurrent agents (${maxAgents}) already reached. Wait for agents to complete or increase the limit.`
-              }],
+              content: [
+                {
+                  type: "text",
+                  text: `Cannot spawn agents: Maximum concurrent agents (${maxAgents}) already reached. Wait for agents to complete or increase the limit.`,
+                },
+              ],
             };
           }
 
           // Limit assignments to available slots
-          const assignmentsToProcess = args.assignments.slice(0, availableSlots);
+          const assignmentsToProcess = args.assignments.slice(
+            0,
+            availableSlots,
+          );
           if (assignmentsToProcess.length < args.assignments.length) {
-            results.push(`Note: Only spawning ${assignmentsToProcess.length} of ${args.assignments.length} agents due to concurrency limit (${maxAgents}).`);
+            results.push(
+              `Note: Only spawning ${assignmentsToProcess.length} of ${args.assignments.length} agents due to concurrency limit (${maxAgents}).`,
+            );
           }
 
           // Spawn agents concurrently using Promise.allSettled
-          const spawnPromises = assignmentsToProcess.map(async (assignment) => {
-            let workItemAssigned = false;
-            let workItemMoved = false;
-            const uniqueName = nameMapping.get(assignment.agentName)!;
+          const spawnPromises = assignmentsToProcess.map(
+            async (assignment: any) => {
+              let workItemAssigned = false;
+              let workItemMoved = false;
+              const uniqueName = nameMapping.get(assignment.agentName)!;
 
-            try {
-              // Step 1: Assign work item with unique name
-              await workItemManager.updateItem(assignment.workItemId, { assignee: uniqueName });
-              workItemAssigned = true;
+              try {
+                // Step 1: Assign work item with unique name
+                await workItemManager.updateItem(assignment.workItemId, {
+                  assignee: uniqueName,
+                });
+                workItemAssigned = true;
 
-              // Step 2: Move to doing
-              await workItemManager.moveItem(assignment.workItemId, 'doing');
-              workItemMoved = true;
+                // Step 2: Move to doing
+                await workItemManager.moveItem(assignment.workItemId, "doing");
+                workItemMoved = true;
 
-              // Step 3: Spawn the agent with unique name
-              await this.agentPool.spawnAgent({
-                name: uniqueName,
-                role: assignment.role,
-                focus: assignment.focus,
-                systemPrompt: `You are a ${assignment.role}. Your focus: ${assignment.focus}`,
-                waitFor: [],
-                priority: 0,
-                workingDirectory: this.getWorkingDirectory(),
-                workItemId: assignment.workItemId,
-              });
+                // Step 3: Spawn the agent with unique name
+                await this.agentPool.spawnAgent({
+                  name: uniqueName,
+                  role: assignment.role,
+                  focus: assignment.focus,
+                  systemPrompt: `You are a ${assignment.role}. Your focus: ${assignment.focus}`,
+                  waitFor: [],
+                  priority: 0,
+                  workingDirectory: this.getWorkingDirectory(),
+                  workItemId: assignment.workItemId,
+                });
 
-              // Step 4: Verify agent was created
-              const updatedAgentStatus = this.agentPool.getStatus();
-              const agentExists = updatedAgentStatus.activeAgents.some((a: any) => a.name === uniqueName) ||
-                                 updatedAgentStatus.pendingAgents.some((a: any) => a.name === uniqueName);
+                // Step 4: Verify agent was created
+                const updatedAgentStatus = this.agentPool.getStatus();
+                const agentExists =
+                  updatedAgentStatus.activeAgents.some(
+                    (a: any) => a.name === uniqueName,
+                  ) ||
+                  updatedAgentStatus.pendingAgents.some(
+                    (a: any) => a.name === uniqueName,
+                  );
 
-              if (!agentExists) {
-                throw new Error(`Agent ${uniqueName} was not found in agent pool after spawning`);
-              }
-
-              this.emit("agentSpawned", uniqueName);
-              return { success: true, agentName: uniqueName, workItemId: assignment.workItemId };
-            } catch (error) {
-              const errorMsg = error instanceof Error ? error.message : String(error);
-
-              // Rollback work item assignment if agent creation failed
-              if (workItemAssigned || workItemMoved) {
-                try {
-                  // Move back to todo and clear assignee
-                  await workItemManager.moveItem(assignment.workItemId, 'todo');
-                  await workItemManager.updateItem(assignment.workItemId, { assignee: undefined });
-                  rollbacks.push({ workItemId: assignment.workItemId, agentName: uniqueName });
-                } catch (rollbackError) {
-                  const rollbackMsg = rollbackError instanceof Error ? rollbackError.message : String(rollbackError);
-                  this.outputChannel.appendLine(`Failed to rollback ${assignment.workItemId}: ${rollbackMsg}`);
+                if (!agentExists) {
+                  throw new Error(
+                    `Agent ${uniqueName} was not found in agent pool after spawning`,
+                  );
                 }
-              }
 
-              return { success: false, agentName: uniqueName, workItemId: assignment.workItemId, error: errorMsg };
-            }
-          });
+                this.emit("agentSpawned", uniqueName);
+                return {
+                  success: true,
+                  agentName: uniqueName,
+                  workItemId: assignment.workItemId,
+                };
+              } catch (error) {
+                const errorMsg =
+                  error instanceof Error ? error.message : String(error);
+
+                // Rollback work item assignment if agent creation failed
+                if (workItemAssigned || workItemMoved) {
+                  try {
+                    // Move back to todo and clear assignee
+                    await workItemManager.moveItem(
+                      assignment.workItemId,
+                      "todo",
+                    );
+                    await workItemManager.updateItem(assignment.workItemId, {
+                      assignee: undefined,
+                    });
+                    rollbacks.push({
+                      workItemId: assignment.workItemId,
+                      agentName: uniqueName,
+                    });
+                  } catch (rollbackError) {
+                    const rollbackMsg =
+                      rollbackError instanceof Error
+                        ? rollbackError.message
+                        : String(rollbackError);
+                    this.outputChannel.appendLine(
+                      `Failed to rollback ${assignment.workItemId}: ${rollbackMsg}`,
+                    );
+                  }
+                }
+
+                return {
+                  success: false,
+                  agentName: uniqueName,
+                  workItemId: assignment.workItemId,
+                  error: errorMsg,
+                };
+              }
+            },
+          );
 
           const spawnResults = await Promise.allSettled(spawnPromises);
 
           for (const result of spawnResults) {
-            if (result.status === 'fulfilled') {
+            if (result.status === "fulfilled") {
               const r = result.value;
               if (r.success) {
                 results.push(`Spawned ${r.agentName} for ${r.workItemId}`);
               } else {
-                errors.push(`Failed to spawn ${r.agentName} for ${r.workItemId}: ${r.error}`);
+                errors.push(
+                  `Failed to spawn ${r.agentName} for ${r.workItemId}: ${r.error}`,
+                );
               }
             } else {
               errors.push(`Unexpected error: ${result.reason}`);
             }
           }
 
-          const successCount = results.filter(r => r.startsWith('Spawned')).length;
+          const successCount = results.filter((r) =>
+            r.startsWith("Spawned"),
+          ).length;
           const summary = [
             `Team Manager spawned ${successCount} agent(s) concurrently.`,
-            '',
-            'Results:',
+            "",
+            "Results:",
             ...results,
-            ...(errors.length > 0 ? ['', 'Errors:', ...errors] : []),
-            ...(rollbacks.length > 0 ? ['', 'Rollbacks (moved back to todo):', ...rollbacks.map(r => `- ${r.workItemId} (agent: ${r.agentName})`)] : []),
-          ].join('\n');
+            ...(errors.length > 0 ? ["", "Errors:", ...errors] : []),
+            ...(rollbacks.length > 0
+              ? [
+                  "",
+                  "Rollbacks (moved back to todo):",
+                  ...rollbacks.map(
+                    (r) => `- ${r.workItemId} (agent: ${r.agentName})`,
+                  ),
+                ]
+              : []),
+          ].join("\n");
 
           this.outputChannel.appendLine(summary);
 
           return {
             content: [{ type: "text", text: summary }],
           };
-        }
+        },
       ),
       tool(
         "get_team_status",
@@ -1144,22 +1401,26 @@ export class OrchestratorAgent extends EventEmitter {
           // Get work item counts by status
           const allItems = await workItemManager.listItems();
           const itemsByStatus = {
-            todo: allItems.filter((i: any) => i.status === 'todo'),
-            doing: allItems.filter((i: any) => i.status === 'doing'),
-            'code-review': allItems.filter((i: any) => i.status === 'code-review'),
-            done: allItems.filter((i: any) => i.status === 'done'),
+            todo: allItems.filter((i: any) => i.status === "todo"),
+            doing: allItems.filter((i: any) => i.status === "doing"),
+            "code-review": allItems.filter(
+              (i: any) => i.status === "code-review",
+            ),
+            done: allItems.filter((i: any) => i.status === "done"),
           };
 
-          const unassignedTodo = itemsByStatus.todo.filter((i: any) => !i.assignee);
+          const unassignedTodo = itemsByStatus.todo.filter(
+            (i: any) => !i.assignee,
+          );
 
           // Check for orphaned work items (assigned but no active agent)
           const activeAgentNames = new Set([
             ...agentStatus.activeAgents.map((a: any) => a.name),
-            ...agentStatus.pendingAgents.map((a: any) => a.name)
+            ...agentStatus.pendingAgents.map((a: any) => a.name),
           ]);
 
-          const orphanedItems = itemsByStatus.doing.filter((i: any) =>
-            i.assignee && !activeAgentNames.has(i.assignee)
+          const orphanedItems = itemsByStatus.doing.filter(
+            (i: any) => i.assignee && !activeAgentNames.has(i.assignee),
           );
 
           // Note: We can't easily detect "idle" agents (agents that completed work but still running)
@@ -1172,63 +1433,91 @@ export class OrchestratorAgent extends EventEmitter {
           const availableSlots = maxAgents - agentStatus.activeAgents.length;
 
           const summary = [
-            '## Team Status Report',
-            '',
-            '### Capacity',
+            "## Team Status Report",
+            "",
+            "### Capacity",
             `- Active Agents: ${agentStatus.activeAgents.length}/${maxAgents}`,
             `- Available Slots: ${availableSlots}`,
             `- Pending Agents: ${agentStatus.pendingAgents.length}`,
             `- Total Cost: $${agentStatus.totalCost.toFixed(4)}`,
-            '',
-            '### Kanban Board',
+            "",
+            "### Kanban Board",
             `- Todo: ${itemsByStatus.todo.length} (${unassignedTodo.length} unassigned)`,
             `- Doing: ${itemsByStatus.doing.length}`,
-            `- Code Review: ${itemsByStatus['code-review'].length}`,
+            `- Code Review: ${itemsByStatus["code-review"].length}`,
             `- Done: ${itemsByStatus.done.length}`,
-            '',
-            '### Active Agents',
+            "",
+            "### Active Agents",
             ...(agentStatus.activeAgents.length > 0
-              ? agentStatus.activeAgents.map((a: any) => `- ${a.name} (${a.role}): ${a.status} - ${a.focus}`)
-              : ['- No active agents']),
-            '',
-            '### Validation Status',
+              ? agentStatus.activeAgents.map(
+                  (a: any) =>
+                    `- ${a.name} (${a.role}): ${a.status} - ${a.focus}`,
+                )
+              : ["- No active agents"]),
+            "",
+            "### Validation Status",
             ...(orphanedItems.length > 0
-              ? [`- WARNING: ${orphanedItems.length} orphaned work item(s) (assigned but no active agent)`, ...orphanedItems.map((i: any) => `  - ${i.id}: ${i.title} (assigned to: ${i.assignee})`)]
-              : ['- No orphaned work items detected']),
+              ? [
+                  `- WARNING: ${orphanedItems.length} orphaned work item(s) (assigned but no active agent)`,
+                  ...orphanedItems.map(
+                    (i: any) =>
+                      `  - ${i.id}: ${i.title} (assigned to: ${i.assignee})`,
+                  ),
+                ]
+              : ["- No orphaned work items detected"]),
             ...(idleAgents.length > 0
-              ? [`- WARNING: ${idleAgents.length} idle agent(s) (active but no assigned work item)`, ...idleAgents.map((a: any) => `  - ${a.name} (workItemId: ${a.workItemId})`)]
-              : ['- No idle agents detected']),
-            '',
-            '### Recommendations',
+              ? [
+                  `- WARNING: ${idleAgents.length} idle agent(s) (active but no assigned work item)`,
+                  ...idleAgents.map(
+                    (a: any) => `  - ${a.name} (workItemId: ${a.workItemId})`,
+                  ),
+                ]
+              : ["- No idle agents detected"]),
+            "",
+            "### Recommendations",
             ...(orphanedItems.length > 0
-              ? ['- Run validate_agent_assignments with autofix=true to resolve orphaned items']
+              ? [
+                  "- Run validate_agent_assignments with autofix=true to resolve orphaned items",
+                ]
               : []),
             ...(unassignedTodo.length > 0 && availableSlots > 0
-              ? [`- ${unassignedTodo.length} unassigned item(s) can be picked up. Spawn agents!`]
+              ? [
+                  `- ${unassignedTodo.length} unassigned item(s) can be picked up. Spawn agents!`,
+                ]
               : []),
             ...(availableSlots === 0 && unassignedTodo.length > 0
-              ? ['- At capacity. Wait for agents to complete or increase limit.']
+              ? [
+                  "- At capacity. Wait for agents to complete or increase limit.",
+                ]
               : []),
-            ...(itemsByStatus['code-review'].length > 0
-              ? [`- ${itemsByStatus['code-review'].length} item(s) awaiting code review.`]
+            ...(itemsByStatus["code-review"].length > 0
+              ? [
+                  `- ${itemsByStatus["code-review"].length} item(s) awaiting code review.`,
+                ]
               : []),
-            ...(unassignedTodo.length === 0 && agentStatus.activeAgents.length === 0
-              ? ['- No pending work and no active agents. Team is idle.']
+            ...(unassignedTodo.length === 0 &&
+            agentStatus.activeAgents.length === 0
+              ? ["- No pending work and no active agents. Team is idle."]
               : []),
-          ].join('\n');
+          ].join("\n");
 
-          this.outputChannel.appendLine('Generated team status report');
+          this.outputChannel.appendLine("Generated team status report");
 
           return {
             content: [{ type: "text", text: summary }],
           };
-        }
+        },
       ),
       tool(
         "validate_agent_assignments",
         "Validate synchronization between active agents and assigned work items. Detects orphaned work items (assigned but no active agent) and idle agents (active but no assigned work item). Can optionally auto-fix issues by moving orphaned items back to 'todo'.",
         {
-          autofix: z.boolean().optional().describe("If true, automatically move orphaned items back to 'todo' and clear assignee (default: false)"),
+          autofix: z
+            .boolean()
+            .optional()
+            .describe(
+              "If true, automatically move orphaned items back to 'todo' and clear assignee (default: false)",
+            ),
         },
         async (args) => {
           const { getWorkItemManager } = await import("../kanban");
@@ -1238,17 +1527,17 @@ export class OrchestratorAgent extends EventEmitter {
           const agentStatus = this.agentPool.getStatus();
 
           // Get all work items in "doing" status
-          const doingItems = await workItemManager.listItems('doing');
+          const doingItems = await workItemManager.listItems("doing");
 
           // Build set of active agent names
           const activeAgentNames = new Set([
             ...agentStatus.activeAgents.map((a: any) => a.name),
-            ...agentStatus.pendingAgents.map((a: any) => a.name)
+            ...agentStatus.pendingAgents.map((a: any) => a.name),
           ]);
 
           // Find orphaned work items (assigned but no corresponding agent)
-          const orphanedItems = doingItems.filter((i: any) =>
-            i.assignee && !activeAgentNames.has(i.assignee)
+          const orphanedItems = doingItems.filter(
+            (i: any) => i.assignee && !activeAgentNames.has(i.assignee),
           );
 
           // Note: We can't easily detect "idle" agents (agents that completed work but still running)
@@ -1263,16 +1552,23 @@ export class OrchestratorAgent extends EventEmitter {
           if (orphanedItems.length > 0) {
             issues.push(`Found ${orphanedItems.length} orphaned work item(s):`);
             for (const item of orphanedItems) {
-              issues.push(`  - ${item.id}: "${item.title}" (assigned to: ${item.assignee})`);
+              issues.push(
+                `  - ${item.id}: "${item.title}" (assigned to: ${item.assignee})`,
+              );
 
               if (args.autofix) {
                 try {
                   // Move back to todo and clear assignee
-                  await workItemManager.moveItem(item.id, 'todo');
-                  await workItemManager.updateItem(item.id, { assignee: undefined });
-                  fixes.push(`  - Fixed ${item.id}: moved to 'todo' and cleared assignee`);
+                  await workItemManager.moveItem(item.id, "todo");
+                  await workItemManager.updateItem(item.id, {
+                    assignee: undefined,
+                  });
+                  fixes.push(
+                    `  - Fixed ${item.id}: moved to 'todo' and cleared assignee`,
+                  );
                 } catch (error) {
-                  const errorMsg = error instanceof Error ? error.message : String(error);
+                  const errorMsg =
+                    error instanceof Error ? error.message : String(error);
                   fixes.push(`  - ERROR fixing ${item.id}: ${errorMsg}`);
                 }
               }
@@ -1281,56 +1577,70 @@ export class OrchestratorAgent extends EventEmitter {
 
           // Report idle agents
           if (idleAgents.length > 0) {
-            issues.push(`Found ${idleAgents.length} idle agent(s) (active but work item not in 'doing'):`);
+            issues.push(
+              `Found ${idleAgents.length} idle agent(s) (active but work item not in 'doing'):`,
+            );
             for (const agent of idleAgents) {
-              issues.push(`  - ${agent.name}: workItemId=${agent.workItemId} (not found in 'doing')`);
+              issues.push(
+                `  - ${agent.name}: workItemId=${agent.workItemId} (not found in 'doing')`,
+              );
             }
-            issues.push(`  Note: These agents may have completed their work. Consider destroying them.`);
+            issues.push(
+              `  Note: These agents may have completed their work. Consider destroying them.`,
+            );
           }
 
           // Report unassigned agents (may be legitimate for some workflows)
           if (unassignedAgents.length > 0) {
-            issues.push(`Found ${unassignedAgents.length} agent(s) without assigned work items:`);
+            issues.push(
+              `Found ${unassignedAgents.length} agent(s) without assigned work items:`,
+            );
             for (const agent of unassignedAgents) {
               issues.push(`  - ${agent.name} (${agent.role})`);
             }
-            issues.push(`  Note: This may be intentional for coordination/review agents.`);
+            issues.push(
+              `  Note: This may be intentional for coordination/review agents.`,
+            );
           }
 
           // Build summary
           const summary = [];
-          summary.push('## Agent Assignment Validation Report');
-          summary.push('');
+          summary.push("## Agent Assignment Validation Report");
+          summary.push("");
 
           if (issues.length === 0) {
-            summary.push('Status: All agent assignments are synchronized.');
-            summary.push(`- ${agentStatus.activeAgents.length + agentStatus.pendingAgents.length} active/pending agents`);
+            summary.push("Status: All agent assignments are synchronized.");
+            summary.push(
+              `- ${agentStatus.activeAgents.length + agentStatus.pendingAgents.length} active/pending agents`,
+            );
             summary.push(`- ${doingItems.length} work items in 'doing'`);
-            summary.push('- No mismatches detected');
+            summary.push("- No mismatches detected");
           } else {
-            summary.push('Status: Issues detected');
-            summary.push('');
+            summary.push("Status: Issues detected");
+            summary.push("");
             summary.push(...issues);
 
             if (args.autofix && fixes.length > 0) {
-              summary.push('');
-              summary.push('Auto-fix Results:');
+              summary.push("");
+              summary.push("Auto-fix Results:");
               summary.push(...fixes);
             }
 
             if (!args.autofix && orphanedItems.length > 0) {
-              summary.push('');
-              summary.push('Recommendation: Run validate_agent_assignments with autofix=true to automatically resolve orphaned items.');
+              summary.push("");
+              summary.push(
+                "Recommendation: Run validate_agent_assignments with autofix=true to automatically resolve orphaned items.",
+              );
             }
           }
 
-          const summaryText = summary.join('\n');
+          const summaryText = summary.join("\n");
           this.outputChannel.appendLine(summaryText);
 
           return {
             content: [{ type: "text", text: summaryText }],
           };
-        }
+        },
       ),
     ];
   }
@@ -1351,16 +1661,16 @@ export class OrchestratorAgent extends EventEmitter {
       if (!serverConfig) continue;
 
       // Convert our transport format to SDK type format
-      if (serverConfig.transport === 'stdio' && serverConfig.command) {
+      if (serverConfig.transport === "stdio" && serverConfig.command) {
         sdkServers[name] = {
-          type: 'stdio',
+          type: "stdio",
           command: serverConfig.command,
           args: serverConfig.args,
           env: serverConfig.env,
         };
-      } else if (serverConfig.transport === 'http' && serverConfig.url) {
+      } else if (serverConfig.transport === "http" && serverConfig.url) {
         sdkServers[name] = {
-          type: 'http',
+          type: "http",
           url: serverConfig.url,
           headers: serverConfig.headers,
         };
@@ -1409,7 +1719,9 @@ export class OrchestratorAgent extends EventEmitter {
     const cleared = this._messageQueue.length;
     this._messageQueue = [];
     if (cleared > 0) {
-      vscode.window.showInformationMessage(`Cleared ${cleared} pending message(s)`);
+      vscode.window.showInformationMessage(
+        `Cleared ${cleared} pending message(s)`,
+      );
     }
   }
 
@@ -1417,34 +1729,51 @@ export class OrchestratorAgent extends EventEmitter {
    * Initialize the work item watcher to respond to Kanban board events
    */
   private async initWorkItemWatcher(): Promise<void> {
-    this.outputChannel.appendLine("[DEBUG] initWorkItemWatcher: importing kanban module...");
+    this.outputChannel.appendLine(
+      "[DEBUG] initWorkItemWatcher: importing kanban module...",
+    );
     const { getWorkItemManager } = await import("../kanban");
-    this.outputChannel.appendLine("[DEBUG] initWorkItemWatcher: got getWorkItemManager");
+    this.outputChannel.appendLine(
+      "[DEBUG] initWorkItemWatcher: got getWorkItemManager",
+    );
     const workItemManager = getWorkItemManager();
-    this.outputChannel.appendLine("[DEBUG] initWorkItemWatcher: got workItemManager instance");
+    this.outputChannel.appendLine(
+      "[DEBUG] initWorkItemWatcher: got workItemManager instance",
+    );
 
     // Explicitly initialize with workspace path
     const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
-    this.outputChannel.appendLine(`[DEBUG] initWorkItemWatcher: workspaceFolder = ${workspaceFolder?.uri?.fsPath ?? 'null'}`);
+    this.outputChannel.appendLine(
+      `[DEBUG] initWorkItemWatcher: workspaceFolder = ${workspaceFolder?.uri?.fsPath ?? "null"}`,
+    );
     if (workspaceFolder) {
       try {
-        this.outputChannel.appendLine("[DEBUG] initWorkItemWatcher: calling initialize...");
+        this.outputChannel.appendLine(
+          "[DEBUG] initWorkItemWatcher: calling initialize...",
+        );
         await workItemManager.initialize(workspaceFolder.uri.fsPath);
-        this.outputChannel.appendLine(`WorkItemManager initialized with: ${workspaceFolder.uri.fsPath}`);
+        this.outputChannel.appendLine(
+          `WorkItemManager initialized with: ${workspaceFolder.uri.fsPath}`,
+        );
       } catch (error) {
-        this.outputChannel.appendLine(`Failed to initialize WorkItemManager: ${error}`);
+        this.outputChannel.appendLine(
+          `Failed to initialize WorkItemManager: ${error}`,
+        );
       }
     }
 
     // Watch for items moving to code-review - spawn reviewer
-    workItemManager.on('itemMoved', async (item: any, _oldStatus: any, newStatus: any) => {
-      if (newStatus === 'code-review' && !item.reviewer) {
-        await this.spawnReviewerForItem(item);
-      }
-    });
+    workItemManager.on(
+      "itemMoved",
+      async (item: any, _oldStatus: any, newStatus: any) => {
+        if (newStatus === "code-review" && !item.reviewer) {
+          await this.spawnReviewerForItem(item);
+        }
+      },
+    );
 
     // Handle cancelled items - destroy associated agent
-    workItemManager.on('itemCancelled', async (item: any) => {
+    workItemManager.on("itemCancelled", async (item: any) => {
       if (item.assignee) {
         await this.agentPool.destroyAgent(item.assignee);
       }
@@ -1460,14 +1789,17 @@ export class OrchestratorAgent extends EventEmitter {
     // Generate unique reviewer name
     const agentStatus = this.agentPool.getStatus();
     const existingNames = new Set([
-      ...agentStatus.activeAgents.map(a => a.name),
+      ...agentStatus.activeAgents.map((a) => a.name),
       ...agentStatus.pendingAgents,
     ]);
-    const uniqueReviewerName = generateUniqueAgentName(`reviewer-${item.id}`, existingNames);
+    const uniqueReviewerName = generateUniqueAgentName(
+      `reviewer-${item.id}`,
+      existingNames,
+    );
 
     const reviewer = await this.agentPool.spawnAgent({
       name: uniqueReviewerName,
-      role: 'Code Reviewer',
+      role: "Code Reviewer",
       focus: `Review: ${item.title}`,
       systemPrompt: `You are a code reviewer. Review the changes for work item ${item.id}: "${item.title}".
 Check for:
@@ -1486,7 +1818,9 @@ When done, move the item to 'done' if approved, or back to 'doing' with notes if
     const { getWorkItemManager } = await import("../kanban");
     await getWorkItemManager().updateItem(item.id, { reviewer: reviewer.name });
 
-    this.outputChannel.appendLine(`Spawned reviewer ${reviewer.name} for work item ${item.id}`);
+    this.outputChannel.appendLine(
+      `Spawned reviewer ${reviewer.name} for work item ${item.id}`,
+    );
   }
 
   /**

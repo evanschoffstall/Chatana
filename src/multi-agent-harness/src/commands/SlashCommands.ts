@@ -1,12 +1,19 @@
 import * as vscode from "vscode";
-import { OrchestratorAgent } from "../coordinator/OrchestratorAgent";
-import { AgentPool } from "../coordinator/AgentPool";
+import {
+  getProfileManager,
+  getVSCodeLLMModels,
+  isVSCodeLLMAvailable,
+} from "../chatana/AgentProfiles";
 import { getConfigManager } from "../chatana/ConfigManager";
 import { getMemoryManager } from "../chatana/MemoryManager";
-import { AgentEditorProvider } from "../providers/AgentEditorProvider";
-import { getProfileManager, isVSCodeLLMAvailable, getVSCodeLLMModels } from "../chatana/AgentProfiles";
 import { MemoryType } from "../chatana/types";
-import { executeAdrCommand, type AdrHandlerContext } from "../workflows/AdrWorkflowHandlers";
+import { AgentPool } from "../coordinator/AgentPool";
+import { OrchestratorAgent } from "../coordinator/OrchestratorAgent";
+import { AgentEditorProvider } from "../providers/AgentEditorProvider";
+import {
+  executeAdrCommand,
+  type AdrHandlerContext,
+} from "../workflows/AdrWorkflowHandlers";
 
 /**
  * Represents a slash command that can be invoked from the chat panel
@@ -75,7 +82,7 @@ class SlashCommandRegistry {
   getMatching(prefix: string): SlashCommand[] {
     const lowerPrefix = prefix.toLowerCase();
     return this.getAll().filter((cmd) =>
-      cmd.name.toLowerCase().startsWith(lowerPrefix)
+      cmd.name.toLowerCase().startsWith(lowerPrefix),
     );
   }
 
@@ -86,7 +93,7 @@ class SlashCommandRegistry {
     input: string,
     extensionContext: vscode.ExtensionContext,
     orchestrator: OrchestratorAgent,
-    agentPool: AgentPool
+    agentPool: AgentPool,
   ): Promise<SlashCommandResult | null> {
     if (!input.startsWith("/")) {
       return null;
@@ -142,7 +149,8 @@ slashCommands.register({
     if (await configManager.exists()) {
       return {
         success: true,
-        message: "Chatana is already initialized for this project. Use /config to edit settings.",
+        message:
+          "Chatana is already initialized for this project. Use /config to edit settings.",
       };
     }
 
@@ -168,7 +176,8 @@ slashCommands.register({
     if (status.activeAgents.length === 0 && status.pendingAgents.length === 0) {
       return {
         success: true,
-        message: "No agents currently running. Use /spawn to start an agent or submit a task to the orchestrator.",
+        message:
+          "No agents currently running. Use /spawn to start an agent or submit a task to the orchestrator.",
       };
     }
 
@@ -198,9 +207,13 @@ slashCommands.register({
   args: [
     { name: "name", description: "Agent name", required: true },
     { name: "role", description: "Agent role", required: true },
-    { name: "focus", description: "What the agent should work on", required: true },
+    {
+      name: "focus",
+      description: "What the agent should work on",
+      required: true,
+    },
   ],
-  help: "Manually spawn a new agent. Usage: /spawn <name> <role> <focus>\nExample: /spawn Parser \"Code Parser\" \"Parse and analyze the FHIR resources\"",
+  help: 'Manually spawn a new agent. Usage: /spawn <name> <role> <focus>\nExample: /spawn Parser "Code Parser" "Parse and analyze the FHIR resources"',
   async execute(ctx) {
     if (ctx.args.length < 3) {
       // Interactive mode - prompt for details
@@ -341,13 +354,16 @@ slashCommands.register({
       }
       const selected = await vscode.window.showQuickPick(
         agents.map((a) => ({ label: a.name, description: a.role })),
-        { placeHolder: "Select agent to pause" }
+        { placeHolder: "Select agent to pause" },
       );
       if (!selected) return { success: false, message: "Pause cancelled." };
 
       const agent = ctx.agentPool.getAgent(selected.label);
       if (!agent) {
-        return { success: false, message: `Agent "${selected.label}" not found.` };
+        return {
+          success: false,
+          message: `Agent "${selected.label}" not found.`,
+        };
       }
 
       agent.pause();
@@ -374,19 +390,24 @@ slashCommands.register({
   async execute(ctx) {
     const agentName = ctx.args[0];
     if (!agentName) {
-      const agents = ctx.agentPool.getAllAgents().filter((a) => a.status === "paused");
+      const agents = ctx.agentPool
+        .getAllAgents()
+        .filter((a) => a.status === "paused");
       if (agents.length === 0) {
         return { success: false, message: "No paused agents." };
       }
       const selected = await vscode.window.showQuickPick(
         agents.map((a) => ({ label: a.name, description: a.role })),
-        { placeHolder: "Select agent to resume" }
+        { placeHolder: "Select agent to resume" },
       );
       if (!selected) return { success: false, message: "Resume cancelled." };
 
       const agent = ctx.agentPool.getAgent(selected.label);
       if (!agent) {
-        return { success: false, message: `Agent "${selected.label}" not found.` };
+        return {
+          success: false,
+          message: `Agent "${selected.label}" not found.`,
+        };
       }
 
       await agent.resume();
@@ -420,7 +441,8 @@ slashCommands.register({
     } catch {
       return {
         success: false,
-        message: "Config file not found. Run /init first to initialize Chatana.",
+        message:
+          "Config file not found. Run /init first to initialize Chatana.",
       };
     }
   },
@@ -433,8 +455,16 @@ slashCommands.register({
   name: "memory",
   description: "Manage agent memory",
   args: [
-    { name: "action", description: "Action", options: ["list", "search", "add", "stats", "decay", "open"] },
-    { name: "type", description: "Memory type", options: ["playbooks", "facts", "sessions"] },
+    {
+      name: "action",
+      description: "Action",
+      options: ["list", "search", "add", "stats", "decay", "open"],
+    },
+    {
+      name: "type",
+      description: "Memory type",
+      options: ["playbooks", "facts", "sessions"],
+    },
     { name: "query", description: "Search query or content" },
   ],
   help: `Manage agent memory stored in YML format.
@@ -502,7 +532,10 @@ Examples:
         let msg = "**Memory Entries**\n\n";
 
         for (const t of typesToList) {
-          const result = await memoryManager.search(t, { limit: 10, sortBy: "lastUsed" });
+          const result = await memoryManager.search(t, {
+            limit: 10,
+            sortBy: "lastUsed",
+          });
 
           msg += `### ${t.charAt(0).toUpperCase() + t.slice(1)} (${result.total} total)\n\n`;
 
@@ -510,9 +543,16 @@ Examples:
             msg += "_No entries yet._\n\n";
           } else {
             for (const entry of result.entries) {
-              const tags = entry.tags.length > 0 ? ` [${entry.tags.join(", ")}]` : "";
-              const confidence = entry.confidence !== undefined ? ` (${(entry.confidence * 100).toFixed(0)}%)` : "";
-              const preview = entry.content.length > 100 ? entry.content.substring(0, 100) + "..." : entry.content;
+              const tags =
+                entry.tags.length > 0 ? ` [${entry.tags.join(", ")}]` : "";
+              const confidence =
+                entry.confidence !== undefined
+                  ? ` (${(entry.confidence * 100).toFixed(0)}%)`
+                  : "";
+              const preview =
+                entry.content.length > 100
+                  ? entry.content.substring(0, 100) + "..."
+                  : entry.content;
               msg += `- **${entry.id}**${confidence}${tags}\n  ${preview}\n`;
             }
             if (result.hasMore) {
@@ -540,7 +580,8 @@ Examples:
       if (!type) {
         return {
           success: false,
-          message: "Please specify a memory type: /memory search <playbooks|facts|sessions> <query>",
+          message:
+            "Please specify a memory type: /memory search <playbooks|facts|sessions> <query>",
         };
       }
 
@@ -555,7 +596,8 @@ Examples:
       if (!query) {
         return {
           success: false,
-          message: "Please provide a search query: /memory search <type> <query>",
+          message:
+            "Please provide a search query: /memory search <type> <query>",
         };
       }
 
@@ -574,8 +616,12 @@ Examples:
         msg += `Found ${result.total} match(es):\n\n`;
 
         for (const entry of result.entries) {
-          const tags = entry.tags.length > 0 ? ` [${entry.tags.join(", ")}]` : "";
-          const confidence = entry.confidence !== undefined ? ` (${(entry.confidence * 100).toFixed(0)}% confidence)` : "";
+          const tags =
+            entry.tags.length > 0 ? ` [${entry.tags.join(", ")}]` : "";
+          const confidence =
+            entry.confidence !== undefined
+              ? ` (${(entry.confidence * 100).toFixed(0)}% confidence)`
+              : "";
           const usedDate = new Date(entry.lastUsed).toLocaleDateString();
 
           msg += `**${entry.id}**${confidence}${tags}\n`;
@@ -616,11 +662,12 @@ Examples:
         // Interactive mode - prompt for content
         const content = await vscode.window.showInputBox({
           prompt: `Enter the ${type.slice(0, -1)} content`,
-          placeHolder: type === "playbooks"
-            ? "e.g., When fixing TypeScript errors, always check tsconfig paths first"
-            : type === "facts"
-            ? "e.g., This project uses React with TypeScript and Tailwind CSS"
-            : "e.g., Implemented user authentication feature",
+          placeHolder:
+            type === "playbooks"
+              ? "e.g., When fixing TypeScript errors, always check tsconfig paths first"
+              : type === "facts"
+                ? "e.g., This project uses React with TypeScript and Tailwind CSS"
+                : "e.g., Implemented user authentication feature",
         });
 
         if (!content) {
@@ -645,8 +692,15 @@ Examples:
           },
         });
 
-        const tags = tagsInput ? tagsInput.split(",").map((t) => t.trim()).filter((t) => t) : [];
-        const confidence = confidenceInput ? parseInt(confidenceInput, 10) / 100 : 0.8;
+        const tags = tagsInput
+          ? tagsInput
+              .split(",")
+              .map((t) => t.trim())
+              .filter((t) => t)
+          : [];
+        const confidence = confidenceInput
+          ? parseInt(confidenceInput, 10) / 100
+          : 0.8;
 
         try {
           await memoryManager.initialize();
@@ -661,7 +715,8 @@ Examples:
             message: `Added new ${type.slice(0, -1)} with ID: **${entry.id}**\n\nContent: ${content}\nTags: ${tags.join(", ") || "none"}\nConfidence: ${(confidence * 100).toFixed(0)}%`,
           };
         } catch (error) {
-          const message = error instanceof Error ? error.message : String(error);
+          const message =
+            error instanceof Error ? error.message : String(error);
           return {
             success: false,
             message: `Failed to add memory. Error: ${message}`,
@@ -674,20 +729,26 @@ Examples:
       let confidence = 0.8;
       const tagsMatch = contentPart.match(/--tags?\s+([^\-]+)/i);
       if (tagsMatch) {
-        tags = tagsMatch[1].split(",").map((t) => t.trim()).filter((t) => t);
+        tags = tagsMatch[1]
+          .split(",")
+          .map((t) => t.trim())
+          .filter((t) => t);
         contentPart = contentPart.replace(/--tags?\s+[^\-]+/i, "").trim();
       }
 
       // Parse --confidence from content
       const confMatch = contentPart.match(/--confidence\s+(\d+)/i);
       if (confMatch) {
-        confidence = Math.min(100, Math.max(0, parseInt(confMatch[1], 10))) / 100;
+        confidence =
+          Math.min(100, Math.max(0, parseInt(confMatch[1], 10))) / 100;
         contentPart = contentPart.replace(/--confidence\s+\d+/i, "").trim();
       }
 
       // Remove quotes if present
-      if ((contentPart.startsWith('"') && contentPart.endsWith('"')) ||
-          (contentPart.startsWith("'") && contentPart.endsWith("'"))) {
+      if (
+        (contentPart.startsWith('"') && contentPart.endsWith('"')) ||
+        (contentPart.startsWith("'") && contentPart.endsWith("'"))
+      ) {
         contentPart = contentPart.slice(1, -1);
       }
 
@@ -730,7 +791,8 @@ Examples:
         if (total === 0) {
           return {
             success: true,
-            message: "No entries needed to be removed. All memories are within retention policy.",
+            message:
+              "No entries needed to be removed. All memories are within retention policy.",
           };
         }
 
@@ -845,7 +907,11 @@ slashCommands.register({
   description: "Export agent session or conversation",
   args: [
     { name: "target", description: "Agent name or 'all'", required: false },
-    { name: "format", description: "Export format", options: ["json", "md", "html"] },
+    {
+      name: "format",
+      description: "Export format",
+      options: ["json", "md", "html"],
+    },
   ],
   help: "Export agent sessions to a file. Usage: /export [agent|all] [json|md|html]\nExamples:\n  /export all json - Export all agents to JSON\n  /export Parser md - Export Parser agent to Markdown",
   async execute(ctx) {
@@ -859,16 +925,18 @@ slashCommands.register({
       };
     }
 
-    const agents = target.toLowerCase() === "all"
-      ? ctx.agentPool.getAllAgents()
-      : [ctx.agentPool.getAgent(target)].filter(Boolean);
+    const agents =
+      target.toLowerCase() === "all"
+        ? ctx.agentPool.getAllAgents()
+        : [ctx.agentPool.getAgent(target)].filter(Boolean);
 
     if (agents.length === 0) {
       return {
         success: false,
-        message: target.toLowerCase() === "all"
-          ? "No agents to export."
-          : `Agent "${target}" not found.`,
+        message:
+          target.toLowerCase() === "all"
+            ? "No agents to export."
+            : `Agent "${target}" not found.`,
       };
     }
 
@@ -882,7 +950,9 @@ slashCommands.register({
         status: agent!.status,
         color: agent!.color,
         messages: agent!.messages,
-        fileClaims: ctx.agentPool.getAllClaims().filter((c) => c.agentName === agent!.name),
+        fileClaims: ctx.agentPool
+          .getAllClaims()
+          .filter((c) => c.agentName === agent!.name),
       })),
     };
 
@@ -906,7 +976,10 @@ slashCommands.register({
     }
 
     // Save to file
-    const timestamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+    const timestamp = new Date()
+      .toISOString()
+      .replace(/[:.]/g, "-")
+      .slice(0, 19);
     const fileName = `chatana-export-${timestamp}.${fileExt}`;
 
     const saveUri = await vscode.window.showSaveDialog({
@@ -936,9 +1009,7 @@ slashCommands.register({
 slashCommands.register({
   name: "search",
   description: "Search agent conversations",
-  args: [
-    { name: "query", description: "Search query", required: true },
-  ],
+  args: [{ name: "query", description: "Search query", required: true }],
   help: "Search across all agent conversations. Usage: /search <query>\nExample: /search FHIR parser error",
   async execute(ctx) {
     const query = ctx.argsRaw.toLowerCase();
@@ -964,7 +1035,8 @@ slashCommands.register({
           const index = content.indexOf(query);
           const start = Math.max(0, index - 50);
           const end = Math.min(content.length, index + query.length + 50);
-          const matchContext = (start > 0 ? "..." : "") +
+          const matchContext =
+            (start > 0 ? "..." : "") +
             message.content.slice(start, end) +
             (end < content.length ? "..." : "");
 
@@ -1023,9 +1095,7 @@ slashCommands.register({
 slashCommands.register({
   name: "history",
   description: "View past session history",
-  args: [
-    { name: "count", description: "Number of sessions to show" },
-  ],
+  args: [{ name: "count", description: "Number of sessions to show" }],
   help: "View past session history from memory. Usage: /history [count]",
   async execute(ctx) {
     const count = parseInt(ctx.args[0], 10) || 10;
@@ -1040,7 +1110,11 @@ slashCommands.register({
       });
 
       if (result.entries.length === 0) {
-        return { success: true, message: "No session history found. Sessions are recorded when agents complete tasks." };
+        return {
+          success: true,
+          message:
+            "No session history found. Sessions are recorded when agents complete tasks.",
+        };
       }
 
       let msg = `**Recent Sessions** (${result.entries.length} of ${result.total})\n\n`;
@@ -1048,8 +1122,12 @@ slashCommands.register({
       for (const session of result.entries) {
         const date = new Date(session.createdAt).toLocaleDateString();
         const time = new Date(session.createdAt).toLocaleTimeString();
-        const confidence = session.confidence !== undefined ? ` (${(session.confidence * 100).toFixed(0)}%)` : "";
-        const tags = session.tags.length > 0 ? ` [${session.tags.join(", ")}]` : "";
+        const confidence =
+          session.confidence !== undefined
+            ? ` (${(session.confidence * 100).toFixed(0)}%)`
+            : "";
+        const tags =
+          session.tags.length > 0 ? ` [${session.tags.join(", ")}]` : "";
 
         msg += `**${date} ${time}**${confidence}${tags}\n`;
         msg += `> ${session.content}\n`;
@@ -1078,10 +1156,14 @@ slashCommands.register({
   name: "profile",
   description: "Manage agent profiles",
   args: [
-    { name: "action", description: "Action", options: ["list", "show", "create", "use"] },
+    {
+      name: "action",
+      description: "Action",
+      options: ["list", "show", "create", "use"],
+    },
     { name: "name", description: "Profile name" },
   ],
-  help: "Manage agent profiles. Usage: /profile [list|show|create|use] [name]\nExamples:\n  /profile list - List all profiles\n  /profile show developer - Show developer profile\n  /profile use claude-opus - Spawn agent with Opus profile",
+  help: "Manage agent profiles. Usage: /profile [list|show|create|use] [name]\nExamples:\n  /profile list - List all profiles\n  /profile show developer - Show developer profile\n  /profile use copilot-gpt-5 - Spawn agent with GPT-5 profile",
   async execute(ctx) {
     const [action = "list", profileId] = ctx.args;
     const profileManager = getProfileManager();
@@ -1092,8 +1174,12 @@ slashCommands.register({
         let msg = "**Available Agent Profiles**\n\n";
 
         // Group by tags
-        const defaultProfiles = profiles.filter((p) => p.tags?.includes("default"));
-        const roleProfiles = profiles.filter((p) => !p.tags?.includes("default"));
+        const defaultProfiles = profiles.filter((p) =>
+          p.tags?.includes("default"),
+        );
+        const roleProfiles = profiles.filter(
+          (p) => !p.tags?.includes("default"),
+        );
 
         if (defaultProfiles.length > 0) {
           msg += "**Default Model Profiles:**\n";
@@ -1112,7 +1198,8 @@ slashCommands.register({
           }
         }
 
-        msg += "\nUse `/profile show <id>` for details or `/profile use <id>` to spawn.";
+        msg +=
+          "\nUse `/profile show <id>` for details or `/profile use <id>` to spawn.";
         return { success: true, message: msg };
       }
 
@@ -1123,13 +1210,17 @@ slashCommands.register({
 
         const profile = await profileManager.getProfile(profileId);
         if (!profile) {
-          return { success: false, message: `Profile "${profileId}" not found.` };
+          return {
+            success: false,
+            message: `Profile "${profileId}" not found.`,
+          };
         }
 
         let msg = `**${profile.name}** (\`${profile.id}\`)\n\n`;
         msg += `**Role:** ${profile.role}\n`;
-        if (profile.description) msg += `**Description:** ${profile.description}\n`;
-        msg += `**Model:** ${profile.model.provider === "claude" ? profile.model.modelId : "VS Code Copilot"}\n`;
+        if (profile.description)
+          msg += `**Description:** ${profile.description}\n`;
+        msg += `**Model:** ${profile.model.provider === "vscode" ? "VS Code Copilot" : profile.model.modelId}\n`;
 
         if (profile.tools) {
           const perms = [];
@@ -1159,7 +1250,7 @@ slashCommands.register({
               detail: p.description,
               id: p.id,
             })),
-            { placeHolder: "Select a profile to use" }
+            { placeHolder: "Select a profile to use" },
           );
 
           if (!selected) {
@@ -1185,10 +1276,11 @@ slashCommands.register({
           icon: "code",
           color: "#3B82F6",
           model: {
-            provider: "claude",
-            modelId: "claude-sonnet-4-20250514",
+            provider: "copilot",
+            modelId: "gpt-4.1",
           },
-          systemPrompt: "You are a helpful assistant.\n\nYour current task: {{focus}}",
+          systemPrompt:
+            "You are a helpful assistant.\n\nYour current task: {{focus}}",
           tools: {
             allowEdit: true,
             allowShell: true,
@@ -1208,7 +1300,7 @@ slashCommands.register({
           await vscode.workspace.fs.createDirectory(vscode.Uri.file(agentsDir));
           await vscode.workspace.fs.writeFile(
             vscode.Uri.file(filePath),
-            Buffer.from(JSON.stringify(templateProfile, null, 2), "utf8")
+            Buffer.from(JSON.stringify(templateProfile, null, 2), "utf8"),
           );
 
           const doc = await vscode.workspace.openTextDocument(filePath);
@@ -1227,14 +1319,17 @@ slashCommands.register({
       }
 
       default:
-        return { success: false, message: `Unknown action: ${action}. Use: list, show, create, or use.` };
+        return {
+          success: false,
+          message: `Unknown action: ${action}. Use: list, show, create, or use.`,
+        };
     }
   },
 });
 
 async function spawnWithProfile(
   ctx: SlashCommandContext,
-  profileId: string
+  profileId: string,
 ): Promise<SlashCommandResult> {
   const profileManager = getProfileManager();
   const profile = await profileManager.getProfile(profileId);
@@ -1288,11 +1383,11 @@ slashCommands.register({
   async execute(_ctx) {
     let msg = "**Available AI Models**\n\n";
 
-    // Claude models
-    msg += "**Claude (via Agent SDK):**\n";
-    msg += "- `claude-opus-4-20250514` - Most capable, best for complex tasks\n";
-    msg += "- `claude-sonnet-4-20250514` - Balanced performance and speed\n";
-    msg += "- `claude-haiku-3-5-20241022` - Fastest, good for simple tasks\n\n";
+    // Copilot CLI model choices
+    msg += "**Copilot CLI Models:**\n";
+    msg += "- `gpt-5` - Most capable, best for complex tasks\n";
+    msg += "- `gpt-4.1` - Balanced performance and speed\n";
+    msg += "- `gpt-4.1-mini` - Fast, good for simple tasks\n\n";
 
     // VS Code LLM
     const vscodeLLMAvailable = await isVSCodeLLMAvailable();
@@ -1386,11 +1481,15 @@ export function getSlashCommandCompletions(prefix: string): Array<{
   description: string;
   args?: string;
 }> {
-  const commands = prefix ? slashCommands.getMatching(prefix) : slashCommands.getAll();
+  const commands = prefix
+    ? slashCommands.getMatching(prefix)
+    : slashCommands.getAll();
   return commands.map((cmd) => ({
     name: cmd.name,
     description: cmd.description,
-    args: cmd.args?.map((a) => (a.required ? `<${a.name}>` : `[${a.name}]`)).join(" "),
+    args: cmd.args
+      ?.map((a) => (a.required ? `<${a.name}>` : `[${a.name}]`))
+      .join(" "),
   }));
 }
 
@@ -1448,16 +1547,22 @@ function generateMarkdownExport(data: ExportData): string {
     md += `### Conversation\n\n`;
     for (const message of agent.messages) {
       const timestamp = new Date(message.timestamp).toLocaleTimeString();
-      const roleIcon = message.role === "user" ? "👤" : message.role === "assistant" ? "🤖" : "⚙️";
+      const roleIcon =
+        message.role === "user"
+          ? "👤"
+          : message.role === "assistant"
+            ? "🤖"
+            : "⚙️";
 
       if (message.toolCall) {
         md += `**${roleIcon} ${message.role}** (${timestamp})\n\n`;
         md += `> Tool: \`${message.toolCall.name}\`\n`;
         md += `> \`\`\`json\n> ${JSON.stringify(message.toolCall.arguments, null, 2).replace(/\n/g, "\n> ")}\n> \`\`\`\n`;
         if (message.toolCall.result !== undefined) {
-          const result = typeof message.toolCall.result === "string"
-            ? message.toolCall.result.slice(0, 500)
-            : JSON.stringify(message.toolCall.result).slice(0, 500);
+          const result =
+            typeof message.toolCall.result === "string"
+              ? message.toolCall.result.slice(0, 500)
+              : JSON.stringify(message.toolCall.result).slice(0, 500);
           md += `> Result: ${result}${result.length >= 500 ? "..." : ""}\n`;
         }
         md += `\n`;
@@ -1484,7 +1589,7 @@ function registerAdrCommand(
   name: string,
   description: string,
   help: string,
-  args?: SlashCommand['args']
+  args?: SlashCommand["args"],
 ): void {
   slashCommands.register({
     name,
@@ -1513,65 +1618,105 @@ function registerAdrCommand(
 
 // Register all ADR workflow commands
 registerAdrCommand(
-  'fn-feature',
-  'Create a new feature area for investigation',
-  'Creates a feature folder in .chatana/features/ with README and investigations subfolder.\n\nUsage: /fn-feature <feature-name>\nExample: /fn-feature api-caching',
-  [{ name: 'feature-name', description: 'Name of the feature', required: true }]
-);
-
-registerAdrCommand(
-  'fn-investigation',
-  'Add an investigation exploring one approach',
-  'Creates an investigation document in .chatana/features/<feature>/investigations/.\n\nUsage: /fn-investigation <feature-name> <investigation-topic>\nExample: /fn-investigation api-caching redis-approach',
+  "fn-feature",
+  "Create a new feature area for investigation",
+  "Creates a feature folder in .chatana/features/ with README and investigations subfolder.\n\nUsage: /fn-feature <feature-name>\nExample: /fn-feature api-caching",
   [
-    { name: 'feature-name', description: 'Name of the feature', required: true },
-    { name: 'investigation-topic', description: 'Topic of the investigation', required: true },
-  ]
+    {
+      name: "feature-name",
+      description: "Name of the feature",
+      required: true,
+    },
+  ],
 );
 
 registerAdrCommand(
-  'fn-adr',
-  'Create ADR from viable investigations',
-  'Creates an Architecture Decision Record in .chatana/adr/ based on completed investigations.\n\nUsage: /fn-adr <feature-name>\nExample: /fn-adr api-caching',
-  [{ name: 'feature-name', description: 'Name of the feature', required: true }]
-);
-
-registerAdrCommand(
-  'fn-reject',
-  'Formally reject an investigation with reasoning',
-  'Marks an investigation as rejected and archives it with the rejection reason.\n\nUsage: /fn-reject <feature-name> <investigation-topic>\nExample: /fn-reject api-caching in-memory-only',
+  "fn-investigation",
+  "Add an investigation exploring one approach",
+  "Creates an investigation document in .chatana/features/<feature>/investigations/.\n\nUsage: /fn-investigation <feature-name> <investigation-topic>\nExample: /fn-investigation api-caching redis-approach",
   [
-    { name: 'feature-name', description: 'Name of the feature', required: true },
-    { name: 'investigation-topic', description: 'Topic to reject', required: true },
-  ]
+    {
+      name: "feature-name",
+      description: "Name of the feature",
+      required: true,
+    },
+    {
+      name: "investigation-topic",
+      description: "Topic of the investigation",
+      required: true,
+    },
+  ],
 );
 
 registerAdrCommand(
-  'fn-task',
-  'Implement and iterate on ADR tasks',
-  'Spawns an implementation agent to work on tasks from an ADR.\n\nUsage: /fn-task\nThe command will prompt you to select an ADR and tasks to work on.',
-  []
+  "fn-adr",
+  "Create ADR from viable investigations",
+  "Creates an Architecture Decision Record in .chatana/adr/ based on completed investigations.\n\nUsage: /fn-adr <feature-name>\nExample: /fn-adr api-caching",
+  [
+    {
+      name: "feature-name",
+      description: "Name of the feature",
+      required: true,
+    },
+  ],
 );
 
 registerAdrCommand(
-  'fn-accept',
-  'Accept implemented ADR and move to docs/adr/',
-  'Marks an ADR as accepted and moves it to the official docs/adr/ directory.\n\nUsage: /fn-accept <feature-name>\nExample: /fn-accept api-caching',
-  [{ name: 'feature-name', description: 'Name of the feature', required: true }]
+  "fn-reject",
+  "Formally reject an investigation with reasoning",
+  "Marks an investigation as rejected and archives it with the rejection reason.\n\nUsage: /fn-reject <feature-name> <investigation-topic>\nExample: /fn-reject api-caching in-memory-only",
+  [
+    {
+      name: "feature-name",
+      description: "Name of the feature",
+      required: true,
+    },
+    {
+      name: "investigation-topic",
+      description: "Topic to reject",
+      required: true,
+    },
+  ],
 );
 
 registerAdrCommand(
-  'fn-review',
-  'Technical code review before acceptance',
-  'Spawns a code reviewer agent to review the implementation of an ADR.\n\nUsage: /fn-review\nThe command will prompt you to select an ADR to review.',
-  []
+  "fn-task",
+  "Implement and iterate on ADR tasks",
+  "Spawns an implementation agent to work on tasks from an ADR.\n\nUsage: /fn-task\nThe command will prompt you to select an ADR and tasks to work on.",
+  [],
 );
 
 registerAdrCommand(
-  'fn-document',
-  'Update documentation for implemented feature',
-  'Spawns a documentation agent to update docs for a feature.\n\nUsage: /fn-document <feature-name>\nExample: /fn-document api-caching',
-  [{ name: 'feature-name', description: 'Name of the feature', required: true }]
+  "fn-accept",
+  "Accept implemented ADR and move to docs/adr/",
+  "Marks an ADR as accepted and moves it to the official docs/adr/ directory.\n\nUsage: /fn-accept <feature-name>\nExample: /fn-accept api-caching",
+  [
+    {
+      name: "feature-name",
+      description: "Name of the feature",
+      required: true,
+    },
+  ],
+);
+
+registerAdrCommand(
+  "fn-review",
+  "Technical code review before acceptance",
+  "Spawns a code reviewer agent to review the implementation of an ADR.\n\nUsage: /fn-review\nThe command will prompt you to select an ADR to review.",
+  [],
+);
+
+registerAdrCommand(
+  "fn-document",
+  "Update documentation for implemented feature",
+  "Spawns a documentation agent to update docs for a feature.\n\nUsage: /fn-document <feature-name>\nExample: /fn-document api-caching",
+  [
+    {
+      name: "feature-name",
+      description: "Name of the feature",
+      required: true,
+    },
+  ],
 );
 
 // ============================================================================
@@ -1709,9 +1854,10 @@ function generateHtmlExport(data: ExportData): string {
           <pre><code>${escapeHtml(JSON.stringify(message.toolCall.arguments, null, 2))}</code></pre>
 `;
         if (message.toolCall.result !== undefined) {
-          const result = typeof message.toolCall.result === "string"
-            ? message.toolCall.result.slice(0, 1000)
-            : JSON.stringify(message.toolCall.result).slice(0, 1000);
+          const result =
+            typeof message.toolCall.result === "string"
+              ? message.toolCall.result.slice(0, 1000)
+              : JSON.stringify(message.toolCall.result).slice(0, 1000);
           html += `          <strong>Result:</strong> <pre><code>${escapeHtml(result)}</code></pre>\n`;
         }
         html += `        </div>\n`;

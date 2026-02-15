@@ -8,29 +8,46 @@ import { TransientTodoStatus } from "../kanban/types";
  *
  * @param agentName - The name of the agent these tools are for
  */
-export async function createTodoCaptureMcpTools(agentName: string): Promise<any[]> {
+export async function createTodoCaptureMcpTools(
+  agentName: string,
+): Promise<any[]> {
   const { z } = await import("zod");
-  const { tool } = await import("@anthropic-ai/claude-agent-sdk");
-  const { getTransientTodoManager } = await import("../kanban/TransientTodoManager");
+  const { tool } = await import("../runtime/OpenAIRuntime.js");
+  const { getTransientTodoManager } =
+    await import("../kanban/TransientTodoManager");
 
   return [
     tool(
       "capture_todos",
       "Report your current todo list state to the Kanban board. " +
-      "This displays your tasks alongside persistent work items. " +
-      "Call this whenever your todo list changes.",
+        "This displays your tasks alongside persistent work items. " +
+        "Call this whenever your todo list changes.",
       {
-        todos: z.array(z.object({
-          content: z.string().describe("The todo content (imperative form, e.g., 'Run tests')"),
-          status: z.enum(["pending", "in_progress", "completed"]).describe("Current status of the todo"),
-          activeForm: z.string().describe("Present continuous form shown during execution (e.g., 'Running tests')"),
-        })).describe("Array of all current todos"),
+        todos: z
+          .array(
+            z.object({
+              content: z
+                .string()
+                .describe(
+                  "The todo content (imperative form, e.g., 'Run tests')",
+                ),
+              status: z
+                .enum(["pending", "in_progress", "completed"])
+                .describe("Current status of the todo"),
+              activeForm: z
+                .string()
+                .describe(
+                  "Present continuous form shown during execution (e.g., 'Running tests')",
+                ),
+            }),
+          )
+          .describe("Array of all current todos"),
       },
       async (args) => {
         try {
           const manager = getTransientTodoManager();
 
-          const todos = args.todos.map(t => ({
+          const todos = args.todos.map((t: any) => ({
             content: t.content,
             status: t.status as TransientTodoStatus,
             activeForm: t.activeForm,
@@ -39,9 +56,11 @@ export async function createTodoCaptureMcpTools(agentName: string): Promise<any[
           manager.syncTodos(agentName, todos);
 
           const summary = {
-            pending: todos.filter(t => t.status === 'pending').length,
-            in_progress: todos.filter(t => t.status === 'in_progress').length,
-            completed: todos.filter(t => t.status === 'completed').length,
+            pending: todos.filter((t: any) => t.status === "pending").length,
+            in_progress: todos.filter((t: any) => t.status === "in_progress")
+              .length,
+            completed: todos.filter((t: any) => t.status === "completed")
+              .length,
           };
 
           return {
@@ -62,13 +81,13 @@ export async function createTodoCaptureMcpTools(agentName: string): Promise<any[
             ],
           };
         }
-      }
+      },
     ),
 
     tool(
       "clear_todos",
       "Clear all your todos from the Kanban board. " +
-      "Use this when you've completed all work or are resetting your task list.",
+        "Use this when you've completed all work or are resetting your task list.",
       {},
       async () => {
         try {
@@ -93,7 +112,7 @@ export async function createTodoCaptureMcpTools(agentName: string): Promise<any[
             ],
           };
         }
-      }
+      },
     ),
   ];
 }

@@ -1,6 +1,6 @@
+import { createClaimsMcpTools } from "./ClaimsMcpServer";
 import { createLspMcpTools } from "./LspMcpServer";
 import { createMailMcpTools } from "./MailMcpServer";
-import { createClaimsMcpTools } from "./ClaimsMcpServer";
 import { createMemoryMcpTools } from "./MemoryMcpServer";
 import { createWorkItemsMcpTools } from "./WorkItemsMcpServer";
 
@@ -17,23 +17,32 @@ import { createWorkItemsMcpTools } from "./WorkItemsMcpServer";
  * @param agentName - The name of the agent these tools are for
  * @returns An SDK MCP server instance
  */
-export async function createExtensionMcpServer(agentName: string): Promise<any> {
-  const { createSdkMcpServer } = await import("@anthropic-ai/claude-agent-sdk");
+export async function createExtensionMcpServer(
+  agentName: string,
+): Promise<any> {
+  const { createSdkMcpServer } = await import("../runtime/OpenAIRuntime.js");
 
   // Get all tool definitions
-  const [lspTools, mailTools, claimsTools, memoryTools, workItemsTools] = await Promise.all([
-    createLspMcpTools(),
-    createMailMcpTools(agentName),
-    createClaimsMcpTools(agentName),
-    createMemoryMcpTools(),
-    createWorkItemsMcpTools(agentName),
-  ]);
+  const [lspTools, mailTools, claimsTools, memoryTools, workItemsTools] =
+    await Promise.all([
+      createLspMcpTools(),
+      createMailMcpTools(agentName),
+      createClaimsMcpTools(agentName),
+      createMemoryMcpTools(),
+      createWorkItemsMcpTools(agentName),
+    ]);
 
   // Create a single MCP server with all tools
   return createSdkMcpServer({
     name: "chatana",
     version: "1.0.0",
-    tools: [...lspTools, ...mailTools, ...claimsTools, ...memoryTools, ...workItemsTools],
+    tools: [
+      ...lspTools,
+      ...mailTools,
+      ...claimsTools,
+      ...memoryTools,
+      ...workItemsTools,
+    ],
   });
 }
 

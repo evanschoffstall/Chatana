@@ -1,23 +1,24 @@
-const path = require('path');
+const path = require("path");
 
 /**@type {import('webpack').Configuration}*/
 const config = {
-  target: 'node',
-  mode: 'none',
+  target: "node",
+  mode: "none",
 
-  entry: './src/extension.ts',
+  entry: "./src/extension.ts",
   output: {
-    path: path.resolve(__dirname, 'dist'),
-    filename: 'extension.js',
-    libraryTarget: 'commonjs2'
+    path: path.resolve(__dirname, "dist"),
+    filename: "extension.js",
+    libraryTarget: "commonjs2",
   },
   externals: {
-    vscode: 'commonjs vscode',
-    // Keep the Claude Agent SDK external to avoid hardcoded paths during bundling
-    '@anthropic-ai/claude-agent-sdk': 'commonjs @anthropic-ai/claude-agent-sdk'
+    vscode: "commonjs vscode",
   },
   resolve: {
-    extensions: ['.ts', '.js']
+    extensions: [".ts", ".js"],
+    extensionAlias: {
+      ".js": [".ts", ".js"],
+    },
   },
   module: {
     rules: [
@@ -26,16 +27,16 @@ const config = {
         exclude: /node_modules/,
         use: [
           {
-            loader: 'ts-loader'
-          }
-        ]
-      }
-    ]
+            loader: "ts-loader",
+          },
+        ],
+      },
+    ],
   },
-  devtool: 'nosources-source-map',
+  devtool: "nosources-source-map",
   infrastructureLogging: {
-    level: "log"
-  }
+    level: "log",
+  },
 };
 
 module.exports = config;

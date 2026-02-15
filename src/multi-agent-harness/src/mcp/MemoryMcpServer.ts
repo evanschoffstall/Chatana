@@ -1,7 +1,7 @@
 import * as fs from "fs/promises";
 import * as path from "path";
-import { Playbook, Fact, SessionLog } from "../chatana/types";
 import { getConfigManager } from "../chatana/ConfigManager";
+import { Fact, Playbook, SessionLog } from "../chatana/types";
 
 /**
  * MemoryManager handles persistent agent memory stored in .chatana/memory/
@@ -30,7 +30,7 @@ class MemoryManager {
     try {
       const playbooksData = await fs.readFile(
         path.join(memoryPath, "playbooks.json"),
-        "utf-8"
+        "utf-8",
       );
       this.playbooks = JSON.parse(playbooksData);
     } catch {
@@ -40,7 +40,7 @@ class MemoryManager {
     try {
       const factsData = await fs.readFile(
         path.join(memoryPath, "facts.json"),
-        "utf-8"
+        "utf-8",
       );
       this.facts = JSON.parse(factsData);
     } catch {
@@ -50,7 +50,7 @@ class MemoryManager {
     try {
       const sessionsData = await fs.readFile(
         path.join(memoryPath, "sessions.json"),
-        "utf-8"
+        "utf-8",
       );
       this.sessions = JSON.parse(sessionsData);
     } catch {
@@ -74,17 +74,17 @@ class MemoryManager {
       fs.writeFile(
         path.join(memoryPath, "playbooks.json"),
         JSON.stringify(this.playbooks, null, 2),
-        "utf-8"
+        "utf-8",
       ),
       fs.writeFile(
         path.join(memoryPath, "facts.json"),
         JSON.stringify(this.facts, null, 2),
-        "utf-8"
+        "utf-8",
       ),
       fs.writeFile(
         path.join(memoryPath, "sessions.json"),
         JSON.stringify(this.sessions, null, 2),
-        "utf-8"
+        "utf-8",
       ),
     ]);
   }
@@ -116,7 +116,10 @@ class MemoryManager {
     const maxSessions = config.memory?.maxEntries?.sessions ?? 1000;
     if (this.sessions.length > maxSessions) {
       this.sessions = this.sessions
-        .sort((a, b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime())
+        .sort(
+          (a, b) =>
+            new Date(b.startTime).getTime() - new Date(a.startTime).getTime(),
+        )
         .slice(0, maxSessions);
     }
   }
@@ -125,7 +128,12 @@ class MemoryManager {
   // Playbook Operations
   // ============================================================================
 
-  async addPlaybook(playbook: Omit<Playbook, "id" | "createdAt" | "lastUsed" | "useCount" | "confidence">): Promise<Playbook> {
+  async addPlaybook(
+    playbook: Omit<
+      Playbook,
+      "id" | "createdAt" | "lastUsed" | "useCount" | "confidence"
+    >,
+  ): Promise<Playbook> {
     await this.load();
 
     const newPlaybook: Playbook = {
@@ -151,7 +159,7 @@ class MemoryManager {
         (p) =>
           p.title.toLowerCase().includes(queryLower) ||
           p.description.toLowerCase().includes(queryLower) ||
-          p.tags.some((t) => t.toLowerCase().includes(queryLower))
+          p.tags.some((t) => t.toLowerCase().includes(queryLower)),
       )
       .sort((a, b) => b.confidence - a.confidence);
   }
@@ -178,12 +186,14 @@ class MemoryManager {
   // Fact Operations
   // ============================================================================
 
-  async addFact(fact: Omit<Fact, "id" | "createdAt" | "lastVerified" | "confidence">): Promise<Fact> {
+  async addFact(
+    fact: Omit<Fact, "id" | "createdAt" | "lastVerified" | "confidence">,
+  ): Promise<Fact> {
     await this.load();
 
     // Check for existing similar fact
     const existing = this.facts.find(
-      (f) => f.category === fact.category && f.statement === fact.statement
+      (f) => f.category === fact.category && f.statement === fact.statement,
     );
 
     if (existing) {
@@ -259,7 +269,7 @@ class MemoryManager {
     outcome: SessionLog["outcome"],
     summary?: string,
     filesChanged?: string[],
-    lessonsLearned?: string[]
+    lessonsLearned?: string[],
   ): Promise<SessionLog | null> {
     await this.load();
 
@@ -284,15 +294,21 @@ class MemoryManager {
         (s) =>
           s.task.toLowerCase().includes(queryLower) ||
           s.summary?.toLowerCase().includes(queryLower) ||
-          s.lessonsLearned?.some((l) => l.toLowerCase().includes(queryLower))
+          s.lessonsLearned?.some((l) => l.toLowerCase().includes(queryLower)),
       )
-      .sort((a, b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime());
+      .sort(
+        (a, b) =>
+          new Date(b.startTime).getTime() - new Date(a.startTime).getTime(),
+      );
   }
 
   async getRecentSessions(count: number = 10): Promise<SessionLog[]> {
     await this.load();
     return this.sessions
-      .sort((a, b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime())
+      .sort(
+        (a, b) =>
+          new Date(b.startTime).getTime() - new Date(a.startTime).getTime(),
+      )
       .slice(0, count);
   }
 }
@@ -305,7 +321,7 @@ const globalMemoryManager = new MemoryManager();
  */
 export async function createMemoryMcpTools(): Promise<any[]> {
   const { z } = await import("zod");
-  const { tool } = await import("@anthropic-ai/claude-agent-sdk");
+  const { tool } = await import("../runtime/OpenAIRuntime.js");
 
   return [
     // ========================================================================
@@ -316,7 +332,9 @@ export async function createMemoryMcpTools(): Promise<any[]> {
       "Search for existing playbooks (procedures) that might help with the current task. " +
         "Playbooks contain step-by-step instructions learned from previous successful tasks.",
       {
-        query: z.string().describe("Search query for playbook titles, descriptions, or tags"),
+        query: z
+          .string()
+          .describe("Search query for playbook titles, descriptions, or tags"),
       },
       async (args) => {
         const playbooks = await globalMemoryManager.searchPlaybooks(args.query);
@@ -337,10 +355,13 @@ export async function createMemoryMcpTools(): Promise<any[]> {
 
         return {
           content: [
-            { type: "text", text: `Found ${playbooks.length} playbook(s):\n\n${formatted}` },
+            {
+              type: "text",
+              text: `Found ${playbooks.length} playbook(s):\n\n${formatted}`,
+            },
           ],
         };
-      }
+      },
     ),
 
     tool(
@@ -368,7 +389,7 @@ export async function createMemoryMcpTools(): Promise<any[]> {
             },
           ],
         };
-      }
+      },
     ),
 
     tool(
@@ -391,10 +412,13 @@ export async function createMemoryMcpTools(): Promise<any[]> {
 
         return {
           content: [
-            { type: "text", text: `Saved playbook: ${playbook.title} (ID: ${playbook.id})` },
+            {
+              type: "text",
+              text: `Saved playbook: ${playbook.title} (ID: ${playbook.id})`,
+            },
           ],
         };
-      }
+      },
     ),
 
     // ========================================================================
@@ -406,10 +430,18 @@ export async function createMemoryMcpTools(): Promise<any[]> {
         "the codebase, architecture, conventions, or requirements.",
       {
         query: z.string().describe("Search query"),
-        category: z.string().optional().describe("Optional category filter (e.g., 'architecture', 'convention', 'requirement')"),
+        category: z
+          .string()
+          .optional()
+          .describe(
+            "Optional category filter (e.g., 'architecture', 'convention', 'requirement')",
+          ),
       },
       async (args) => {
-        const facts = await globalMemoryManager.searchFacts(args.query, args.category);
+        const facts = await globalMemoryManager.searchFacts(
+          args.query,
+          args.category,
+        );
 
         if (facts.length === 0) {
           return {
@@ -426,9 +458,14 @@ export async function createMemoryMcpTools(): Promise<any[]> {
           .join("\n");
 
         return {
-          content: [{ type: "text", text: `Found ${facts.length} fact(s):\n\n${formatted}` }],
+          content: [
+            {
+              type: "text",
+              text: `Found ${facts.length} fact(s):\n\n${formatted}`,
+            },
+          ],
         };
-      }
+      },
     ),
 
     tool(
@@ -438,9 +475,14 @@ export async function createMemoryMcpTools(): Promise<any[]> {
       {
         category: z
           .string()
-          .describe("Category (e.g., 'architecture', 'convention', 'requirement', 'dependency', 'gotcha')"),
+          .describe(
+            "Category (e.g., 'architecture', 'convention', 'requirement', 'dependency', 'gotcha')",
+          ),
         statement: z.string().describe("The fact statement"),
-        source: z.string().optional().describe("Where this was learned from (file, documentation, etc.)"),
+        source: z
+          .string()
+          .optional()
+          .describe("Where this was learned from (file, documentation, etc.)"),
       },
       async (args) => {
         const fact = await globalMemoryManager.addFact({
@@ -450,9 +492,14 @@ export async function createMemoryMcpTools(): Promise<any[]> {
         });
 
         return {
-          content: [{ type: "text", text: `Saved fact: [${fact.category}] ${fact.statement}` }],
+          content: [
+            {
+              type: "text",
+              text: `Saved fact: [${fact.category}] ${fact.statement}`,
+            },
+          ],
         };
-      }
+      },
     ),
 
     // ========================================================================
@@ -463,7 +510,9 @@ export async function createMemoryMcpTools(): Promise<any[]> {
       "Search past work sessions for similar tasks. Useful for learning from " +
         "previous attempts and avoiding past mistakes.",
       {
-        query: z.string().describe("Search query for tasks, summaries, or lessons"),
+        query: z
+          .string()
+          .describe("Search query for tasks, summaries, or lessons"),
       },
       async (args) => {
         const sessions = await globalMemoryManager.searchSessions(args.query);
@@ -474,31 +523,44 @@ export async function createMemoryMcpTools(): Promise<any[]> {
           };
         }
 
-        const formatted = sessions.slice(0, 5).map((s) => {
-          const outcome = s.outcome.toUpperCase();
-          const date = new Date(s.startTime).toLocaleDateString();
-          let text = `[${outcome}] ${date}: ${s.task}`;
-          if (s.summary) text += `\n  Summary: ${s.summary}`;
-          if (s.lessonsLearned && s.lessonsLearned.length > 0) {
-            text += `\n  Lessons: ${s.lessonsLearned.join("; ")}`;
-          }
-          return text;
-        }).join("\n\n");
+        const formatted = sessions
+          .slice(0, 5)
+          .map((s) => {
+            const outcome = s.outcome.toUpperCase();
+            const date = new Date(s.startTime).toLocaleDateString();
+            let text = `[${outcome}] ${date}: ${s.task}`;
+            if (s.summary) text += `\n  Summary: ${s.summary}`;
+            if (s.lessonsLearned && s.lessonsLearned.length > 0) {
+              text += `\n  Lessons: ${s.lessonsLearned.join("; ")}`;
+            }
+            return text;
+          })
+          .join("\n\n");
 
         return {
-          content: [{ type: "text", text: `Found ${sessions.length} session(s):\n\n${formatted}` }],
+          content: [
+            {
+              type: "text",
+              text: `Found ${sessions.length} session(s):\n\n${formatted}`,
+            },
+          ],
         };
-      }
+      },
     ),
 
     tool(
       "memory_get_recent_sessions",
       "Get the most recent work sessions to understand recent project activity.",
       {
-        count: z.number().optional().describe("Number of sessions to retrieve (default: 5)"),
+        count: z
+          .number()
+          .optional()
+          .describe("Number of sessions to retrieve (default: 5)"),
       },
       async (args) => {
-        const sessions = await globalMemoryManager.getRecentSessions(args.count ?? 5);
+        const sessions = await globalMemoryManager.getRecentSessions(
+          args.count ?? 5,
+        );
 
         if (sessions.length === 0) {
           return {
@@ -506,16 +568,18 @@ export async function createMemoryMcpTools(): Promise<any[]> {
           };
         }
 
-        const formatted = sessions.map((s) => {
-          const outcome = s.outcome.toUpperCase();
-          const date = new Date(s.startTime).toLocaleDateString();
-          return `[${outcome}] ${date}: ${s.task}${s.summary ? ` - ${s.summary}` : ""}`;
-        }).join("\n");
+        const formatted = sessions
+          .map((s) => {
+            const outcome = s.outcome.toUpperCase();
+            const date = new Date(s.startTime).toLocaleDateString();
+            return `[${outcome}] ${date}: ${s.task}${s.summary ? ` - ${s.summary}` : ""}`;
+          })
+          .join("\n");
 
         return {
           content: [{ type: "text", text: `Recent sessions:\n\n${formatted}` }],
         };
-      }
+      },
     ),
 
     tool(
@@ -525,7 +589,10 @@ export async function createMemoryMcpTools(): Promise<any[]> {
       {
         lesson: z.string().describe("What was learned"),
         context: z.string().describe("The situation where this was learned"),
-        category: z.string().optional().describe("Category (e.g., 'gotcha', 'best-practice', 'workaround')"),
+        category: z
+          .string()
+          .optional()
+          .describe("Category (e.g., 'gotcha', 'best-practice', 'workaround')"),
       },
       async (args) => {
         // Save as a fact with the lesson category
@@ -538,7 +605,7 @@ export async function createMemoryMcpTools(): Promise<any[]> {
         return {
           content: [{ type: "text", text: `Recorded lesson: ${args.lesson}` }],
         };
-      }
+      },
     ),
   ];
 }

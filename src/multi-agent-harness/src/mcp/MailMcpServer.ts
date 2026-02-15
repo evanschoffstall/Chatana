@@ -1,8 +1,8 @@
 import { EventEmitter } from "events";
 import * as fs from "fs/promises";
 import * as path from "path";
-import { AgentMessage } from "../coordinator/types";
 import { getConfigManager } from "../chatana/ConfigManager";
+import { AgentMessage } from "../coordinator/types";
 
 /**
  * File-backed message store for inter-agent communication.
@@ -81,7 +81,7 @@ class FileBackedMessageStore extends EventEmitter {
     if (this.initializing) {
       // Wait for existing initialization to complete
       while (this.initializing) {
-        await new Promise(resolve => setTimeout(resolve, 10));
+        await new Promise((resolve) => setTimeout(resolve, 10));
       }
       return;
     }
@@ -119,7 +119,9 @@ class FileBackedMessageStore extends EventEmitter {
       this.initialized = true;
     } catch (error) {
       this.initializing = false;
-      throw new Error(`Failed to initialize message store: ${error instanceof Error ? error.message : String(error)}`);
+      throw new Error(
+        `Failed to initialize message store: ${error instanceof Error ? error.message : String(error)}`,
+      );
     } finally {
       this.initializing = false;
     }
@@ -170,7 +172,10 @@ class FileBackedMessageStore extends EventEmitter {
   /**
    * Load messages from a specific directory
    */
-  private async loadMessagesFromDir(dir: string, archived: boolean): Promise<void> {
+  private async loadMessagesFromDir(
+    dir: string,
+    archived: boolean,
+  ): Promise<void> {
     try {
       const files = await fs.readdir(dir);
 
@@ -179,7 +184,10 @@ class FileBackedMessageStore extends EventEmitter {
 
         try {
           const content = await fs.readFile(path.join(dir, file), "utf-8");
-          const message = this.parseMessageFile(content, file.replace(".md", ""));
+          const message = this.parseMessageFile(
+            content,
+            file.replace(".md", ""),
+          );
           if (message) {
             message.archived = archived;
             this.cache.set(message.id, message);
@@ -196,12 +204,19 @@ class FileBackedMessageStore extends EventEmitter {
   /**
    * Parse a message file content into an AgentMessage
    */
-  private parseMessageFile(content: string, fallbackId: string): AgentMessage | null {
+  private parseMessageFile(
+    content: string,
+    fallbackId: string,
+  ): AgentMessage | null {
     try {
       // Parse YAML frontmatter
-      const frontmatterMatch = content.match(/^---\n([\s\S]*?)\n---\n?([\s\S]*)$/);
+      const frontmatterMatch = content.match(
+        /^---\n([\s\S]*?)\n---\n?([\s\S]*)$/,
+      );
       if (!frontmatterMatch) {
-        console.warn(`Invalid message file format for ${fallbackId}: missing frontmatter`);
+        console.warn(
+          `Invalid message file format for ${fallbackId}: missing frontmatter`,
+        );
         return null;
       }
 
@@ -217,7 +232,9 @@ class FileBackedMessageStore extends EventEmitter {
       }
 
       if (!meta.from || !meta.to || !meta.subject) {
-        console.warn(`Invalid message file for ${fallbackId}: missing required fields`);
+        console.warn(
+          `Invalid message file for ${fallbackId}: missing required fields`,
+        );
         return null;
       }
 
@@ -273,12 +290,16 @@ class FileBackedMessageStore extends EventEmitter {
     await this.initialize();
 
     try {
-      const targetDir = message.archived ? this.getArchiveDir() : this.getInboxDir();
+      const targetDir = message.archived
+        ? this.getArchiveDir()
+        : this.getInboxDir();
       const filePath = path.join(targetDir, `${message.id}.md`);
       const content = this.serializeMessage(message);
       await fs.writeFile(filePath, content, "utf-8");
     } catch (error) {
-      throw new Error(`Failed to save message ${message.id}: ${error instanceof Error ? error.message : String(error)}`);
+      throw new Error(
+        `Failed to save message ${message.id}: ${error instanceof Error ? error.message : String(error)}`,
+      );
     }
   }
 
@@ -333,7 +354,9 @@ class FileBackedMessageStore extends EventEmitter {
         messages.push(message);
       }
     }
-    return messages.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
+    return messages.sort(
+      (a, b) => b.timestamp.getTime() - a.timestamp.getTime(),
+    );
   }
 
   /**
@@ -348,7 +371,9 @@ class FileBackedMessageStore extends EventEmitter {
         messages.push(message);
       }
     }
-    return messages.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
+    return messages.sort(
+      (a, b) => b.timestamp.getTime() - a.timestamp.getTime(),
+    );
   }
 
   /**
@@ -371,7 +396,9 @@ class FileBackedMessageStore extends EventEmitter {
         messages.push(message);
       }
     }
-    return messages.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
+    return messages.sort(
+      (a, b) => b.timestamp.getTime() - a.timestamp.getTime(),
+    );
   }
 
   /**
@@ -485,8 +512,9 @@ class FileBackedMessageStore extends EventEmitter {
   async getAllMessages(): Promise<AgentMessage[]> {
     await this.initialize();
 
-    return Array.from(this.cache.values())
-      .sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
+    return Array.from(this.cache.values()).sort(
+      (a, b) => b.timestamp.getTime() - a.timestamp.getTime(),
+    );
   }
 
   /**
@@ -519,7 +547,7 @@ export const globalMessageStore = new FileBackedMessageStore();
  */
 export async function createMailMcpTools(agentName: string): Promise<any[]> {
   const { z } = await import("zod");
-  const { tool } = await import("@anthropic-ai/claude-agent-sdk");
+  const { tool } = await import("../runtime/OpenAIRuntime.js");
 
   return [
     tool(
@@ -527,10 +555,17 @@ export async function createMailMcpTools(agentName: string): Promise<any[]> {
       "Send a message to another agent or the orchestrator. " +
         "Messages are stored in .chatana/messages/ as markdown files.",
       {
-        to: z.string().describe("Recipient agent name (or 'orchestrator' or 'human')"),
+        to: z
+          .string()
+          .describe("Recipient agent name (or 'orchestrator' or 'human')"),
         subject: z.string().describe("Message subject/summary"),
-        body: z.string().optional().describe("Detailed message content (markdown supported)"),
-        priority: z.enum(["low", "normal", "high", "urgent"]).optional()
+        body: z
+          .string()
+          .optional()
+          .describe("Detailed message content (markdown supported)"),
+        priority: z
+          .enum(["low", "normal", "high", "urgent"])
+          .optional()
           .describe("Message priority level"),
       },
       async (args) => {
@@ -554,7 +589,7 @@ export async function createMailMcpTools(agentName: string): Promise<any[]> {
             },
           ],
         };
-      }
+      },
     ),
 
     tool(
@@ -562,7 +597,10 @@ export async function createMailMcpTools(agentName: string): Promise<any[]> {
       "Check your inbox for messages from other agents. " +
         "Messages are stored in .chatana/messages/ as markdown files.",
       {
-        unreadOnly: z.boolean().optional().describe("Only show unread messages"),
+        unreadOnly: z
+          .boolean()
+          .optional()
+          .describe("Only show unread messages"),
         from: z.string().optional().describe("Filter by sender"),
       },
       async (args) => {
@@ -594,7 +632,8 @@ export async function createMailMcpTools(agentName: string): Promise<any[]> {
             const date = m.timestamp.toLocaleDateString();
             let text = `${readStatus} From: ${m.from} @ ${date} ${time}\n  Subject: ${m.subject}`;
             if (m.body) {
-              const preview = m.body.length > 100 ? m.body.slice(0, 100) + "..." : m.body;
+              const preview =
+                m.body.length > 100 ? m.body.slice(0, 100) + "..." : m.body;
               text += `\n  Preview: ${preview}`;
             }
             text += `\n  File: .chatana/messages/${m.id}.md`;
@@ -610,7 +649,7 @@ export async function createMailMcpTools(agentName: string): Promise<any[]> {
             },
           ],
         };
-      }
+      },
     ),
 
     tool(
@@ -618,7 +657,10 @@ export async function createMailMcpTools(agentName: string): Promise<any[]> {
       "Read the full content of a message by ID",
       {
         messageId: z.string().describe("The message ID to read"),
-        markAsRead: z.boolean().optional().describe("Mark as read after reading (default: true)"),
+        markAsRead: z
+          .boolean()
+          .optional()
+          .describe("Mark as read after reading (default: true)"),
       },
       async (args) => {
         const messages = await globalMessageStore.getAllMessages();
@@ -647,7 +689,7 @@ export async function createMailMcpTools(agentName: string): Promise<any[]> {
         return {
           content: [{ type: "text", text }],
         };
-      }
+      },
     ),
 
     tool(
@@ -680,10 +722,13 @@ export async function createMailMcpTools(agentName: string): Promise<any[]> {
 
         return {
           content: [
-            { type: "text", text: `Sent messages (${messages.length}):\n\n${formatted}` },
+            {
+              type: "text",
+              text: `Sent messages (${messages.length}):\n\n${formatted}`,
+            },
           ],
         };
-      }
+      },
     ),
 
     tool(
@@ -705,7 +750,7 @@ export async function createMailMcpTools(agentName: string): Promise<any[]> {
             },
           ],
         };
-      }
+      },
     ),
 
     tool(
@@ -727,7 +772,7 @@ export async function createMailMcpTools(agentName: string): Promise<any[]> {
             },
           ],
         };
-      }
+      },
     ),
 
     tool(
@@ -743,7 +788,9 @@ export async function createMailMcpTools(agentName: string): Promise<any[]> {
 
         if (!originalMessage) {
           return {
-            content: [{ type: "text", text: `Message ${args.messageId} not found.` }],
+            content: [
+              { type: "text", text: `Message ${args.messageId} not found.` },
+            ],
           };
         }
 
@@ -767,7 +814,7 @@ export async function createMailMcpTools(agentName: string): Promise<any[]> {
             },
           ],
         };
-      }
+      },
     ),
 
     tool(
@@ -789,7 +836,7 @@ export async function createMailMcpTools(agentName: string): Promise<any[]> {
             },
           ],
         };
-      }
+      },
     ),
 
     tool(
@@ -821,10 +868,13 @@ export async function createMailMcpTools(agentName: string): Promise<any[]> {
 
         return {
           content: [
-            { type: "text", text: `Archived messages (${messages.length}):\n\n${formatted}` },
+            {
+              type: "text",
+              text: `Archived messages (${messages.length}):\n\n${formatted}`,
+            },
           ],
         };
-      }
+      },
     ),
   ];
 }
